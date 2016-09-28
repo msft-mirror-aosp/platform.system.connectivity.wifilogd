@@ -47,6 +47,11 @@ bool MessageBuffer::CanFitNow(uint16_t length) const {
          GetFreeSize() - GetHeaderSize() >= length;
 }
 
+void MessageBuffer::Clear() {
+  read_pos_ = 0;
+  write_pos_ = 0;
+}
+
 std::tuple<const uint8_t*, size_t> MessageBuffer::ConsumeNextMessage() {
   if (read_pos_ >= write_pos_) {
     return {nullptr, 0};

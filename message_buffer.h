@@ -43,6 +43,12 @@ class MessageBuffer {
   // bytes of user data.
   bool CanFitNow(uint16_t length) const;
 
+  // Clears the buffer. An immediately following read operation will return an
+  // empty message. An immediately following write operation will write to the
+  // head of the buffer. Clearing may be lazy (i.e., underlying storage is not
+  // necessarily zeroed).
+  void Clear();
+
   // Returns the first unread message in the buffer. If there is no such
   // message, returns {nullptr, 0}. MessageBuffer retains ownership of the
   // message's storage.

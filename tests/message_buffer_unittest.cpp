@@ -71,6 +71,14 @@ TEST_F(MessageBufferTest, AppendMaximalOnEmptyBufferSucceeds) {
   EXPECT_TRUE(buffer_.Append(kLargestMessage.data(), kLargestMessage.size()));
 }
 
+TEST_F(MessageBufferTest, AppendMaximalAfterFillAndClearSucceeds) {
+  ASSERT_TRUE(buffer_.Append(kLargestMessage.data(), kLargestMessage.size()));
+  ASSERT_FALSE(buffer_.CanFitNow(1));
+
+  buffer_.Clear();
+  EXPECT_TRUE(buffer_.Append(kLargestMessage.data(), kLargestMessage.size()));
+}
+
 TEST_F(MessageBufferTest, AppendUnalignedMessagesDoesNotCrash) {
   // Odd-length messages should trigger alignment problems, if any such
   // problems exist. We'll need more than one, though, since the first header
@@ -120,7 +128,23 @@ TEST_F(MessageBufferTest, CanFitNowIsCorrectOnFullBuffer) {
   EXPECT_FALSE(buffer_.CanFitNow(1));
 }
 
+TEST_F(MessageBufferTest, CanFitNowIsCorrectAfterClear) {
+  ASSERT_TRUE(buffer_.Append(kLargestMessage.data(), kLargestMessage.size()));
+  ASSERT_FALSE(buffer_.CanFitNow(1));
+
+  buffer_.Clear();
+  EXPECT_TRUE(buffer_.CanFitNow(kLargestMessage.size()));
+}
+
 TEST_F(MessageBufferTest, ConsumeNextMessageReturnsNullOnFreshBuffer) {
+  const std::tuple<const uint8_t*, size_t> expected{nullptr, 0};
+  EXPECT_EQ(expected, buffer_.ConsumeNextMessage());
+}
+
+TEST_F(MessageBufferTest, ConsumeNextMessageReturnsNullAfterFillAndClear) {
+  ASSERT_TRUE(buffer_.Append(kLargestMessage.data(), kLargestMessage.size()));
+  buffer_.Clear();
+
   const std::tuple<const uint8_t*, size_t> expected{nullptr, 0};
   EXPECT_EQ(expected, buffer_.ConsumeNextMessage());
 }
