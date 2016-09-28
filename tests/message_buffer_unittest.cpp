@@ -142,6 +142,37 @@ TEST_F(MessageBufferTest, CanFitNowIsCorrectAfterClear) {
   EXPECT_TRUE(buffer_.CanFitNow(kLargestMessage.size()));
 }
 
+TEST_F(MessageBufferTest, CanFitEverIsCorrectOnFreshBuffer) {
+  EXPECT_TRUE(buffer_.CanFitEver(kLargestMessage.size()));
+  EXPECT_FALSE(buffer_.CanFitEver(kLargestMessage.size() + 1));
+}
+
+TEST_F(MessageBufferTest, CanFitEverIsCorrectAfterSmallWrite) {
+  ASSERT_TRUE(buffer_.Append(kSmallestMessage.data(), kSmallestMessage.size()));
+  EXPECT_TRUE(buffer_.CanFitEver(kLargestMessage.size()));
+  EXPECT_FALSE(buffer_.CanFitEver(kLargestMessage.size() + 1));
+}
+
+TEST_F(MessageBufferTest, CanFitEverIsCorrectOnFullBuffer) {
+  ASSERT_TRUE(buffer_.Append(kLargestMessage.data(), kLargestMessage.size()));
+  EXPECT_TRUE(buffer_.CanFitEver(kLargestMessage.size()));
+  EXPECT_FALSE(buffer_.CanFitEver(kLargestMessage.size() + 1));
+}
+
+TEST_F(MessageBufferTest, CanFitEverIsCorrectAfterRewind) {
+  ASSERT_TRUE(buffer_.Append(kLargestMessage.data(), kLargestMessage.size()));
+  buffer_.Rewind();
+  EXPECT_TRUE(buffer_.CanFitEver(kLargestMessage.size()));
+  EXPECT_FALSE(buffer_.CanFitEver(kLargestMessage.size() + 1));
+}
+
+TEST_F(MessageBufferTest, CanFitEverIsCorrectAfterClear) {
+  ASSERT_TRUE(buffer_.Append(kLargestMessage.data(), kLargestMessage.size()));
+  buffer_.Clear();
+  EXPECT_TRUE(buffer_.CanFitEver(kLargestMessage.size()));
+  EXPECT_FALSE(buffer_.CanFitEver(kLargestMessage.size() + 1));
+}
+
 TEST_F(MessageBufferTest, ConsumeNextMessageReturnsNullOnFreshBuffer) {
   const std::tuple<const uint8_t*, size_t> expected{nullptr, 0};
   EXPECT_EQ(expected, buffer_.ConsumeNextMessage());

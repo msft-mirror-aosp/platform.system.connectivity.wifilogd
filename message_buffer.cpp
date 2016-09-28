@@ -41,6 +41,11 @@ bool MessageBuffer::Append(const uint8_t* message, uint16_t message_len) {
   return true;
 }
 
+bool MessageBuffer::CanFitEver(uint16_t length) const {
+  // This unusual formulation is intended to avoid overflow.
+  return capacity_ - GetHeaderSize() >= length;
+}
+
 bool MessageBuffer::CanFitNow(uint16_t length) const {
   // This unusual formulation is intended to avoid overflow/underflow.
   return GetFreeSize() >= GetHeaderSize() &&
