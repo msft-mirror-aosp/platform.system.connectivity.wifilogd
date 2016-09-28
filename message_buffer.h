@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <tuple>
 
 #include "android-base/macros.h"
 
@@ -42,6 +43,11 @@ class MessageBuffer {
   // bytes of user data.
   bool CanFitNow(uint16_t length) const;
 
+  // Returns the first unread message in the buffer. If there is no such
+  // message, returns {nullptr, 0}. MessageBuffer retains ownership of the
+  // message's storage.
+  std::tuple<const uint8_t*, size_t> ConsumeNextMessage();
+
   // Returns the size of MessageBuffer's per-message header.
   static constexpr size_t GetHeaderSize() { return sizeof(LengthHeader); }
 
@@ -62,6 +68,7 @@ class MessageBuffer {
 
   std::unique_ptr<uint8_t[]> data_;
   size_t capacity_;
+  size_t read_pos_;
   size_t write_pos_;
 
   // MessageBuffer is a value type, so it would be semantically reasonable to

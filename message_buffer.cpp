@@ -25,7 +25,7 @@ namespace android {
 namespace wifilogd {
 
 MessageBuffer::MessageBuffer(size_t size)
-    : data_(new uint8_t[size]), capacity_(size), write_pos_(0) {
+    : data_(new uint8_t[size]), capacity_(size), read_pos_(0), write_pos_(0) {
   CHECK(size > GetHeaderSize());
 }
 
@@ -45,6 +45,24 @@ bool MessageBuffer::CanFitNow(uint16_t length) const {
   // This unusual formulation is intended to avoid overflow/underflow.
   return GetFreeSize() >= GetHeaderSize() &&
          GetFreeSize() - GetHeaderSize() >= length;
+}
+
+std::tuple<const uint8_t*, size_t> MessageBuffer::ConsumeNextMessage() {
+  if (read_pos_ >= write_pos_) {
+    return {nullptr, 0};
+  }
+
+  LengthHeader header;
+  const uint8_t* header_start = data_.get() + read_pos_;
+  CHECK(header_start + sizeof(header) <= data_.get() + capacity_);
+  std::memcpy(&header, header_start, sizeof(header));
+  read_pos_ += sizeof(header);
+
+  const uint8_t* payload_start = data_.get() + read_pos_;
+  read_pos_ += header.payload_len;
+  CHECK(read_pos_ <= capacity_);
+
+  return {payload_start, header.payload_len};
 }
 
 // Private methods below.
