@@ -39,6 +39,10 @@ class MessageBuffer {
   // true if the message was added to the buffer.
   bool Append(NONNULL const uint8_t* data, uint16_t data_len);
 
+  // Returns true if the buffer is large enough to hold |length| bytes of user
+  // data, when the buffer is empty.
+  bool CanFitEver(uint16_t length) const;
+
   // Returns true if the buffer currently has enough free space to hold |length|
   // bytes of user data.
   bool CanFitNow(uint16_t length) const;
