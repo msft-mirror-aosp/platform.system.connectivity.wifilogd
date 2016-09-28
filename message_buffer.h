@@ -22,6 +22,8 @@
 
 #include "android-base/macros.h"
 
+#include "wifilogd/local_utils.h"
+
 namespace android {
 namespace wifilogd {
 
@@ -32,15 +34,35 @@ class MessageBuffer {
   // Constructs the buffer. |size| must be greater than GetHeaderSize().
   explicit MessageBuffer(size_t size);
 
+  // Appends a single message to the buffer. |data_len| must be >=1. Returns
+  // true if the message was added to the buffer.
+  bool Append(NONNULL const uint8_t* data, uint16_t data_len);
+
+  // Returns true if the buffer currently has enough free space to hold |length|
+  // bytes of user data.
+  bool CanFitNow(uint16_t length) const;
+
   // Returns the size of MessageBuffer's per-message header.
   static constexpr size_t GetHeaderSize() { return sizeof(LengthHeader); }
+
+  // Returns the total available free space in the buffer. This may be
+  // larger than the usable space, due to overheads.
+  size_t GetFreeSize() const { return capacity_ - write_pos_; }
 
  private:
   struct LengthHeader {
     uint16_t payload_len;
   };
 
+  // Prepares a header, and writes that header into the buffer.
+  void AppendHeader(uint16_t message_len);
+
+  // Writes arbitrary data into the buffer.
+  void AppendRawBytes(NONNULL const void* data_start, size_t data_len);
+
   std::unique_ptr<uint8_t[]> data_;
+  size_t capacity_;
+  size_t write_pos_;
 
   // MessageBuffer is a value type, so it would be semantically reasonable to
   // support copy and assign. Performance-wise, though, we should avoid
