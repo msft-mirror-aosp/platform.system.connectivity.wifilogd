@@ -15,6 +15,8 @@
  */
 
 #include <array>
+#include <tuple>
+#include <vector>
 
 #include "gtest/gtest.h"
 
@@ -35,6 +37,27 @@ class MessageBufferTest : public ::testing::Test {
   MessageBufferTest() : buffer_{kBufferSizeBytes} {}
 
  protected:
+  size_t FillBufferWithMultipleMessages() {
+    constexpr std::array<uint8_t, kHeaderSizeBytes> message{};
+    static_assert(kBufferSizeBytes % (kHeaderSizeBytes + message.size()) == 0,
+                  "messages will not fill buffer to capacity");
+    size_t n_written;
+    for (n_written = 0;
+         n_written < kBufferSizeBytes / (kHeaderSizeBytes + message.size());
+         ++n_written) {
+      EXPECT_TRUE(buffer_.Append(message.data(), message.size()));
+    }
+    EXPECT_EQ(0U, buffer_.GetFreeSize());
+    return n_written;
+  }
+
+  std::vector<uint8_t> GetNextMessageAsByteVector() {
+    const uint8_t* start;
+    size_t len;
+    std::tie(start, len) = buffer_.ConsumeNextMessage();
+    return {start, start + len};
+  }
+
   MessageBuffer buffer_;
 };
 
@@ -74,14 +97,7 @@ TEST_F(MessageBufferTest, AppendLargerThanFreeSpaceFails) {
 }
 
 TEST_F(MessageBufferTest, AppendMultipleMessagesToFillBufferDoesNotCrash) {
-  constexpr std::array<uint8_t, kHeaderSizeBytes> message{};
-  static_assert(kBufferSizeBytes % (kHeaderSizeBytes + message.size()) == 0,
-                "messages will not fill buffer to capacity");
-  for (size_t i = 0; i < kBufferSizeBytes / (kHeaderSizeBytes + message.size());
-       ++i) {
-    ASSERT_TRUE(buffer_.Append(message.data(), message.size()));
-  }
-  ASSERT_EQ(0U, buffer_.GetFreeSize());
+  FillBufferWithMultipleMessages();
 }
 
 TEST_F(MessageBufferTest, CanFitNowIsCorrectOnFreshBuffer) {
@@ -102,6 +118,87 @@ TEST_F(MessageBufferTest, CanFitNowIsCorrectAfterSmallWrite) {
 TEST_F(MessageBufferTest, CanFitNowIsCorrectOnFullBuffer) {
   ASSERT_TRUE(buffer_.Append(kLargestMessage.data(), kLargestMessage.size()));
   EXPECT_FALSE(buffer_.CanFitNow(1));
+}
+
+TEST_F(MessageBufferTest, ConsumeNextMessageReturnsNullOnFreshBuffer) {
+  const std::tuple<const uint8_t*, size_t> expected{nullptr, 0};
+  EXPECT_EQ(expected, buffer_.ConsumeNextMessage());
+}
+
+TEST_F(MessageBufferTest, ConsumeNextMessageCanReadMinimalMessage) {
+  ASSERT_TRUE(buffer_.Append(kSmallestMessage.data(), kSmallestMessage.size()));
+
+  const auto& ptr_and_size = buffer_.ConsumeNextMessage();
+  EXPECT_NE(nullptr, std::get<0>(ptr_and_size));
+  EXPECT_EQ(kSmallestMessage.size(), std::get<1>(ptr_and_size));
+}
+
+TEST_F(MessageBufferTest, ConsumeNextMessageCanReadMaximalMessage) {
+  ASSERT_TRUE(buffer_.Append(kLargestMessage.data(), kLargestMessage.size()));
+
+  const auto& ptr_and_size = buffer_.ConsumeNextMessage();
+  EXPECT_NE(nullptr, std::get<0>(ptr_and_size));
+  EXPECT_EQ(kLargestMessage.size(), std::get<1>(ptr_and_size));
+}
+
+TEST_F(MessageBufferTest,
+       ConsumeNextMessageReturnsNullAfterMinimalMessageIsConsumed) {
+  ASSERT_TRUE(buffer_.Append(kSmallestMessage.data(), kSmallestMessage.size()));
+  buffer_.ConsumeNextMessage();
+
+  constexpr std::tuple<const uint8_t*, size_t> expected{nullptr, 0};
+  EXPECT_EQ(expected, buffer_.ConsumeNextMessage());
+}
+
+TEST_F(MessageBufferTest,
+       ConsumeNextMessageReturnsNullAfterMaximalMessageIsConsumed) {
+  ASSERT_TRUE(buffer_.Append(kLargestMessage.data(), kLargestMessage.size()));
+  buffer_.ConsumeNextMessage();
+
+  constexpr std::tuple<const uint8_t*, size_t> expected{nullptr, 0};
+  EXPECT_EQ(expected, buffer_.ConsumeNextMessage());
+}
+
+TEST_F(MessageBufferTest,
+       ConsumeNextMessageCanRetreiveAllMessagesFromFullBuffer) {
+  const size_t n_written = FillBufferWithMultipleMessages();
+  size_t n_read = 0;
+  while (std::get<0>(buffer_.ConsumeNextMessage())) {
+    ++n_read;
+  }
+  EXPECT_EQ(n_written, n_read);
+
+  constexpr std::tuple<const uint8_t*, size_t> expected{nullptr, 0};
+  EXPECT_EQ(expected, buffer_.ConsumeNextMessage());
+}
+
+TEST_F(MessageBufferTest,
+       ConsumeNextMessageCanRetreiveMultipleUnaliagnedMessages) {
+  // As in AppendUnalignedMessagesDoesNotCrash, odd-length messages should
+  // trigger alignment problems, if any such problems exist.
+  const std::array<uint8_t, 1> message{};
+  size_t n_written = 0;
+  while (buffer_.CanFitNow(message.size())) {
+    ASSERT_TRUE(buffer_.Append(message.data(), message.size()));
+    ++n_written;
+  }
+
+  size_t n_read = 0;
+  while (std::get<0>(buffer_.ConsumeNextMessage())) {
+    ++n_read;
+  }
+  EXPECT_EQ(n_written, n_read);
+}
+
+TEST_F(MessageBufferTest, ConsumeNextMessageReturnsOurMessages) {
+  const std::vector<uint8_t> message1{{'h', 'e', 'l', 'l', 'o'}};
+  const std::vector<uint8_t> message2{{'w', 'o', 'r', 'l', 'd'}};
+  ASSERT_TRUE(
+      buffer_.Append(message1.data(), static_cast<uint16_t>(message1.size())));
+  ASSERT_TRUE(
+      buffer_.Append(message2.data(), static_cast<uint16_t>(message2.size())));
+  EXPECT_EQ(message1, GetNextMessageAsByteVector());
+  EXPECT_EQ(message2, GetNextMessageAsByteVector());
 }
 
 // Per
