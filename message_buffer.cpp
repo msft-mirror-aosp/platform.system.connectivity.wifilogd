@@ -70,6 +70,8 @@ std::tuple<const uint8_t*, size_t> MessageBuffer::ConsumeNextMessage() {
   return {payload_start, header.payload_len};
 }
 
+void MessageBuffer::Rewind() { read_pos_ = 0; }
+
 // Private methods below.
 
 void MessageBuffer::AppendHeader(uint16_t message_len) {

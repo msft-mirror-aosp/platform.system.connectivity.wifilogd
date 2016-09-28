@@ -61,6 +61,12 @@ class MessageBuffer {
   // larger than the usable space, due to overheads.
   size_t GetFreeSize() const { return capacity_ - write_pos_; }
 
+  // Resets the read pointer to the start of the buffer. An immediately
+  // following read will return the first message in the buffer. An immediately
+  // following write, however, will be placed at the same position as if
+  // Rewind() had not been called.
+  void Rewind();
+
  private:
   struct LengthHeader {
     uint16_t payload_len;
