@@ -128,6 +128,12 @@ TEST_F(MessageBufferTest, CanFitNowIsCorrectOnFullBuffer) {
   EXPECT_FALSE(buffer_.CanFitNow(1));
 }
 
+TEST_F(MessageBufferTest, CanFitNowIsCorrectOnRewoundBuffer) {
+  ASSERT_TRUE(buffer_.Append(kLargestMessage.data(), kLargestMessage.size()));
+  buffer_.Rewind();
+  EXPECT_FALSE(buffer_.CanFitNow(1));
+}
+
 TEST_F(MessageBufferTest, CanFitNowIsCorrectAfterClear) {
   ASSERT_TRUE(buffer_.Append(kLargestMessage.data(), kLargestMessage.size()));
   ASSERT_FALSE(buffer_.CanFitNow(1));
@@ -197,6 +203,21 @@ TEST_F(MessageBufferTest,
 }
 
 TEST_F(MessageBufferTest,
+       ConsumeNextMessageCanRetreiveAllMessagesFromRewoundBuffer) {
+  const size_t n_written = FillBufferWithMultipleMessages();
+  while (std::get<0>(buffer_.ConsumeNextMessage())) {
+    // Silently consume message
+  }
+  buffer_.Rewind();
+
+  size_t n_read = 0;
+  while (std::get<0>(buffer_.ConsumeNextMessage())) {
+    ++n_read;
+  }
+  EXPECT_EQ(n_written, n_read);
+}
+
+TEST_F(MessageBufferTest,
        ConsumeNextMessageCanRetreiveMultipleUnaliagnedMessages) {
   // As in AppendUnalignedMessagesDoesNotCrash, odd-length messages should
   // trigger alignment problems, if any such problems exist.
@@ -221,6 +242,20 @@ TEST_F(MessageBufferTest, ConsumeNextMessageReturnsOurMessages) {
       buffer_.Append(message1.data(), static_cast<uint16_t>(message1.size())));
   ASSERT_TRUE(
       buffer_.Append(message2.data(), static_cast<uint16_t>(message2.size())));
+  EXPECT_EQ(message1, GetNextMessageAsByteVector());
+  EXPECT_EQ(message2, GetNextMessageAsByteVector());
+}
+
+TEST_F(MessageBufferTest, RewindDoesNotAffectWritePointer) {
+  const std::vector<uint8_t> message1{{'h', 'e', 'l', 'l', 'o'}};
+  ASSERT_TRUE(
+      buffer_.Append(message1.data(), static_cast<uint16_t>(message1.size())));
+  buffer_.Rewind();
+
+  const std::vector<uint8_t> message2{{'w', 'o', 'r', 'l', 'd'}};
+  ASSERT_TRUE(
+      buffer_.Append(message2.data(), static_cast<uint16_t>(message2.size())));
+
   EXPECT_EQ(message1, GetNextMessageAsByteVector());
   EXPECT_EQ(message2, GetNextMessageAsByteVector());
 }
