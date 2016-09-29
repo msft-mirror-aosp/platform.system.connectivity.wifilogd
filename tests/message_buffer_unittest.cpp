@@ -277,6 +277,33 @@ TEST_F(MessageBufferTest, ConsumeNextMessageReturnsOurMessages) {
   EXPECT_EQ(message2, GetNextMessageAsByteVector());
 }
 
+TEST_F(MessageBufferTest, GetFreeSizeIsCorrectOnFreshBuffer) {
+  EXPECT_EQ(kBufferSizeBytes, buffer_.GetFreeSize());
+}
+
+TEST_F(MessageBufferTest, GetFreeSizeIsCorrectAfterSmallWrite) {
+  ASSERT_TRUE(buffer_.Append(kSmallestMessage.data(), kSmallestMessage.size()));
+  EXPECT_EQ(kBufferSizeBytes - kHeaderSizeBytes - kSmallestMessage.size(),
+            buffer_.GetFreeSize());
+}
+
+TEST_F(MessageBufferTest, GetFreeSizeIsCorrectOnFullBuffer) {
+  ASSERT_TRUE(buffer_.Append(kLargestMessage.data(), kLargestMessage.size()));
+  EXPECT_EQ(0U, buffer_.GetFreeSize());
+}
+
+TEST_F(MessageBufferTest, GetFreeSizeIsCorrectAfterRewindOfFullBuffer) {
+  ASSERT_TRUE(buffer_.Append(kLargestMessage.data(), kLargestMessage.size()));
+  buffer_.Rewind();
+  EXPECT_EQ(0U, buffer_.GetFreeSize());
+}
+
+TEST_F(MessageBufferTest, GetFreeSizeIsCorrectAfterClear) {
+  ASSERT_TRUE(buffer_.Append(kLargestMessage.data(), kLargestMessage.size()));
+  buffer_.Clear();
+  EXPECT_EQ(kBufferSizeBytes, buffer_.GetFreeSize());
+}
+
 TEST_F(MessageBufferTest, RewindDoesNotAffectWritePointer) {
   const std::vector<uint8_t> message1{{'h', 'e', 'l', 'l', 'o'}};
   ASSERT_TRUE(
