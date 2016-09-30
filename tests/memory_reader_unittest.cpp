@@ -159,7 +159,7 @@ TEST(MemoryReaderTest, SizeIsZeroForNullBuffer) {
 }
 
 // Per
-// github.com/google/googletest/blob/master/googletest/docs/AdvancedGuide.md#death-tests),
+// github.com/google/googletest/blob/master/googletest/docs/AdvancedGuide.md#death-tests,
 // death tests should be specially named.
 
 TEST(MemoryReaderDeathTest, CopyOutOrDieWithNullBufferCausesDeath) {
