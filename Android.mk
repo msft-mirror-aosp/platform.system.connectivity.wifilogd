@@ -46,6 +46,7 @@ LOCAL_MODULE := wifilogd_unit_test
 LOCAL_CPPFLAGS := $(wifilogd_cpp_flags) $(wifilogd_gtest_cpp_flags)
 LOCAL_C_INCLUDES := $(wifilogd_includes)
 LOCAL_SRC_FILES := \
+    tests/byte_buffer_unittest.cpp \
     tests/local_utils_unittest.cpp \
     tests/main.cpp \
     tests/message_buffer_unittest.cpp \
