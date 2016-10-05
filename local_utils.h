@@ -34,13 +34,15 @@
   local_utils::internal::SafelyClamp<decltype(SRC), DST_TYPE, MIN, MAX, MIN, \
                                      MAX>(SRC)
 
-// While attributes are standard in C++11, the nonnull attribute is not part of
-// the standard. We use a macro to abstract the nonnull attribute, to allow
-// the code to compile with compilers that don't recognize nonnull.
+// While attributes are standard in C++11, these attributes are not part of
+// the standard. We use macros to abstract these attributes, to allow
+// the code to compile with compilers that don't recognize these attributes.
 #if defined(__clang__)
-#define NONNULL [[gnu::nonnull]] /* NOLINT(whitespace/braces) */
+#define NONNULL [[gnu::nonnull]]                 /* NOLINT(whitespace/braces) */
+#define RETURNS_NONNULL [[gnu::returns_nonnull]] /* NOLINT ... */
 #else
 #define NONNULL
+#define RETURNS_NONNULL
 #endif
 
 namespace android {
