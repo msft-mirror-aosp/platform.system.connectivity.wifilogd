@@ -24,7 +24,20 @@
 namespace android {
 namespace wifilogd {
 
+using local_utils::CopyFromBufferOrDie;
 using local_utils::GetMaxVal;
+
+TEST(LocalUtilsTest, CopyFromBufferOrDieCopiesData) {
+  struct Message {
+    int a;
+    char b;
+  };
+  const Message original{5, 'c'};
+  const auto& duplicate =
+      CopyFromBufferOrDie<Message>(&original, sizeof(original));
+  EXPECT_EQ(original.a, duplicate.a);
+  EXPECT_EQ(original.b, duplicate.b);
+}
 
 TEST(LocalUtilsTest, GetMaxValFromTypeIsCorrectForUnsignedTypes) {
   EXPECT_EQ(std::numeric_limits<uint8_t>::max(), GetMaxVal<uint8_t>());
@@ -78,6 +91,20 @@ TEST(LocalUtilsTest, SafelyClampWorksForUnsignedToSigned) {
   EXPECT_EQ(int8_t{1}, (SAFELY_CLAMP(uint8_t{1}, int8_t, 0, 127)));
   EXPECT_EQ(int8_t{127}, (SAFELY_CLAMP(uint8_t{127}, int8_t, 0, 127)));
   EXPECT_EQ(int8_t{127}, (SAFELY_CLAMP(uint8_t{128}, int8_t, 0, 127)));
+}
+
+// Per
+// github.com/google/googletest/blob/master/googletest/docs/AdvancedGuide.md#death-tests),
+// death tests should be specially named.
+
+TEST(LocalUtilsDeathTest, CopyFromBufferOrDieWithShortBufferCausesDeath) {
+  struct Message {
+    int a;
+    char b;
+  };
+  const Message original{5, 'c'};
+  EXPECT_DEATH((CopyFromBufferOrDie<Message>(&original, sizeof(original) - 1)),
+               "Check failed");
 }
 
 }  // namespace wifilogd
