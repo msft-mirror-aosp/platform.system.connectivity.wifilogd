@@ -22,6 +22,8 @@
 #include <limits>
 #include <type_traits>
 
+#include "android-base/logging.h"
+
 // Converts the value SRC to a value of DST_TYPE, in the range of [MIN, MAX].
 // Values less than MIN are clamped to MIN, and values greater than MAX are
 // clamped to MAX. Conversions are safe in the sense that the range is checked
@@ -48,6 +50,29 @@
 namespace android {
 namespace wifilogd {
 namespace local_utils {
+
+// Copies a |T| out of |buf|, aborting if |buf| is too short to hold a |T|.
+//
+// As compared to accessing the underlying data using reinterpret_cast<>,
+// CopyFromBufferOrDie() provides three benefits:
+// 1. Guarantees that the returned header is properly aligned. While
+//    many processors support some unaligned reads, there are some
+//    exceptions. E.g, a 64-bit unaligned read on 32-bit ARM may cause
+//    a program to abort.
+// 2. Removes the potential for bugs due to compiler optimizations based
+//    on type-based alias analysis. (These are the kinds of bugs that
+//    "strict-aliasing" warnings try to call out.)
+// 3. Verifies that the source buffer is large enough to contain the
+//    data we're trying to read out.
+template <typename T>
+T CopyFromBufferOrDie(NONNULL const void* buf, size_t buf_len) {
+  static_assert(std::is_trivially_copyable<T>::value,
+                "CopyFromBufferOrDie can only copy trivially copyable types");
+  T out;
+  CHECK(buf_len >= sizeof(out));
+  std::memcpy(&out, buf, sizeof(out));
+  return out;
+}
 
 // Returns the maximal value representable by T. Generates a compile-time
 // error if T is not an integral type.
