@@ -32,7 +32,9 @@ LOCAL_MODULE := libwifilogd
 LOCAL_CPPFLAGS := $(wifilogd_cpp_flags)
 LOCAL_C_INCLUDES := $(wifilogd_includes)
 LOCAL_SRC_FILES := \
-    message_buffer.cpp
+    message_buffer.cpp \
+    os.cpp \
+    raw_os.cpp
 LOCAL_SHARED_LIBRARIES := \
     libbase \
     liblog
@@ -50,8 +52,12 @@ LOCAL_SRC_FILES := \
     tests/local_utils_unittest.cpp \
     tests/main.cpp \
     tests/message_buffer_unittest.cpp \
+    tests/mock_os.cpp \
+    tests/mock_raw_os.cpp \
+    tests/os_unittest.cpp \
     tests/protocol_unittest.cpp
 LOCAL_STATIC_LIBRARIES := \
+    libgmock \
     libgtest \
     libwifilogd
 LOCAL_SHARED_LIBRARIES := \
