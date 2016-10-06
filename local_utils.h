@@ -92,6 +92,11 @@ constexpr T GetMaxVal(const T& /* t_instance */) {
   return GetMaxVal<T>();
 }
 
+// Returns true if |c| is a printable character, for ASCII data.
+inline bool IsAsciiPrintable(uint8_t c) {
+  return (c == '\t' || c == '\n' || (c >= ' ' && c <= '~'));
+}
+
 namespace internal {
 
 // Implements the functionality documented for the SAFELY_CLAMP macro.
