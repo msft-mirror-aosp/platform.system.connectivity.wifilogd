@@ -14,11 +14,14 @@
  * limitations under the License.
  */
 
+#include <array>
 #include <memory>
+#include <tuple>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
+#include "wifilogd/local_utils.h"
 #include "wifilogd/os.h"
 #include "wifilogd/tests/mock_raw_os.h"
 
@@ -29,7 +32,10 @@ namespace {
 using ::testing::_;
 using ::testing::Return;
 using ::testing::SetArgumentPointee;
+using ::testing::SetErrnoAndReturn;
 using ::testing::StrictMock;
+
+using local_utils::GetMaxVal;
 
 class OsTest : public ::testing::Test {
  public:
@@ -59,6 +65,38 @@ TEST_F(OsTest, GetTimestampSucceeds) {
   EXPECT_EQ(kFakeNsecs, received.nsecs);
 }
 
+TEST_F(OsTest, WriteReturnsCorrectValueForSuccessfulWrite) {
+  constexpr int kFakeFd = 100;
+  constexpr std::array<uint8_t, 8192> buffer{};
+  EXPECT_CALL(*raw_os_, Write(kFakeFd, buffer.data(), buffer.size()))
+      .WillOnce(Return(buffer.size()));
+
+  constexpr std::tuple<size_t, Os::Errno> kExpectedResult{buffer.size(), 0};
+  EXPECT_EQ(kExpectedResult, os_->Write(kFakeFd, buffer.data(), buffer.size()));
+}
+
+TEST_F(OsTest, WriteReturnsCorrectValueForTruncatedWrite) {
+  constexpr int kFakeFd = 100;
+  constexpr int kBytesWritten = 4096;
+  constexpr std::array<uint8_t, 8192> buffer{};
+  EXPECT_CALL(*raw_os_, Write(kFakeFd, buffer.data(), buffer.size()))
+      .WillOnce(Return(kBytesWritten));
+
+  constexpr std::tuple<size_t, Os::Errno> kExpectedResult{kBytesWritten, 0};
+  EXPECT_EQ(kExpectedResult, os_->Write(kFakeFd, buffer.data(), buffer.size()));
+}
+
+TEST_F(OsTest, WriteReturnsCorrectValueForFailedWrite) {
+  constexpr int kFakeFd = 100;
+  constexpr Os::Errno kError = EBADFD;
+  constexpr std::array<uint8_t, 8192> buffer{};
+  EXPECT_CALL(*raw_os_, Write(kFakeFd, buffer.data(), buffer.size()))
+      .WillOnce(SetErrnoAndReturn(kError, -1));
+
+  constexpr std::tuple<size_t, Os::Errno> kExpectedResult{0, kError};
+  EXPECT_EQ(kExpectedResult, os_->Write(kFakeFd, buffer.data(), buffer.size()));
+}
+
 // Per
 // github.com/google/googletest/blob/master/googletest/docs/AdvancedGuide.md#death-tests),
 // death tests should be specially named.
@@ -76,6 +114,24 @@ TEST_F(OsDeathTest, GetTimestampOverlyLargeNsecsCausesDeath) {
 TEST_F(OsDeathTest, GetTimestampRawOsErrorCausesDeath) {
   ON_CALL(*raw_os_, ClockGettime(_, _)).WillByDefault(Return(-1));
   EXPECT_DEATH(os_->GetTimestamp(CLOCK_REALTIME), "Unexpected error");
+}
+
+TEST_F(OsDeathTest, WriteWithOverlyLargeBufferCausesDeath) {
+  constexpr int kFakeFd = 100;
+  constexpr std::array<uint8_t, 8192> buffer{};
+  ON_CALL(*raw_os_, Write(kFakeFd, buffer.data(), GetMaxVal<size_t>()))
+      .WillByDefault(Return(GetMaxVal<ssize_t>()));
+  EXPECT_DEATH(os_->Write(kFakeFd, buffer.data(), GetMaxVal<size_t>()),
+               "Check failed");
+}
+
+TEST_F(OsDeathTest, WriteWithOverrunCausesDeath) {
+  constexpr int kFakeFd = 100;
+  constexpr std::array<uint8_t, 8192> buffer{};
+  ON_CALL(*raw_os_, Write(kFakeFd, buffer.data(), buffer.size()))
+      .WillByDefault(Return(buffer.size() + 1));
+  EXPECT_DEATH(os_->Write(kFakeFd, buffer.data(), buffer.size()),
+               "Check failed");
 }
 
 }  // namespace wifilogd
