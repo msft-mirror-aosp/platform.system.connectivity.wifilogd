@@ -18,6 +18,7 @@
 #include <utility>
 
 #include "android-base/logging.h"
+#include "android-base/unique_fd.h"
 
 #include "wifilogd/byte_buffer.h"
 #include "wifilogd/command_processor.h"
@@ -26,6 +27,8 @@
 
 namespace android {
 namespace wifilogd {
+
+using ::android::base::unique_fd;
 
 using local_utils::CopyFromBufferOrDie;
 using local_utils::GetMaxVal;
@@ -37,8 +40,10 @@ CommandProcessor::CommandProcessor(size_t buffer_size_bytes,
                                    std::unique_ptr<Os> os)
     : current_log_buffer_(buffer_size_bytes), os_(std::move(os)) {}
 
-bool CommandProcessor::ProcessInput(const void* input_buffer,
-                                    size_t n_bytes_read) {
+bool CommandProcessor::ProcessCommand(const void* input_buffer,
+                                      size_t n_bytes_read, int fd) {
+  unique_fd wrapped_fd(fd);
+
   if (n_bytes_read < sizeof(protocol::Command)) {
     return false;
   }
