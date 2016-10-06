@@ -24,6 +24,8 @@
 namespace android {
 namespace wifilogd {
 
+using local_utils::CopyFromBufferOrDie;
+
 MessageBuffer::MessageBuffer(size_t size)
     : data_(new uint8_t[size]), capacity_(size), read_pos_(0), write_pos_(0) {
   CHECK(size > GetHeaderSize());
@@ -62,10 +64,8 @@ std::tuple<const uint8_t*, size_t> MessageBuffer::ConsumeNextMessage() {
     return {nullptr, 0};
   }
 
-  LengthHeader header;
-  const uint8_t* header_start = data_.get() + read_pos_;
-  CHECK(header_start + sizeof(header) <= data_.get() + capacity_);
-  std::memcpy(&header, header_start, sizeof(header));
+  const auto& header = CopyFromBufferOrDie<LengthHeader>(
+      data_.get() + read_pos_, GetReadableSize());
   read_pos_ += sizeof(header);
 
   const uint8_t* payload_start = data_.get() + read_pos_;
