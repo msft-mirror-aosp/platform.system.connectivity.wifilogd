@@ -82,6 +82,10 @@ class MessageBuffer {
   // Writes arbitrary data into the buffer.
   void AppendRawBytes(NONNULL const void* data_start, size_t data_len);
 
+  // Returns the total number of bytes available for reading. This number
+  // includes headers.
+  size_t GetReadableSize() const { return write_pos_ - read_pos_; }
+
   std::unique_ptr<uint8_t[]> data_;
   size_t capacity_;
   size_t read_pos_;
