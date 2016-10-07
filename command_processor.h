@@ -18,8 +18,10 @@
 #define COMMAND_PROCESSOR_H_
 
 #include <memory>
+#include <string>
 
 #include "android-base/macros.h"
+#include "android-base/unique_fd.h"
 
 #include "wifilogd/local_utils.h"
 #include "wifilogd/message_buffer.h"
@@ -52,7 +54,12 @@ class CommandProcessor {
                       int fd);
 
  private:
-  struct TimestampHeader {
+  class TimestampHeader {
+   public:
+    // Returns a string with a formatted representation of the timestamps
+    // contained within this header.
+    std::string ToString() const;
+
     Os::Timestamp since_boot_awake_only;
     Os::Timestamp since_boot_with_sleep;
     Os::Timestamp since_epoch;  // non-monotonic
@@ -63,6 +70,10 @@ class CommandProcessor {
   // copies the first protocol::kMaxMessageSize of |command_buffer|, and returns
   // true.
   bool CopyCommandToLog(NONNULL const void* command_buffer, size_t command_len);
+
+  // Dumps all of the logged messages to |dump_fd|. Returns true unless
+  // an unrecoverable error was encountered.
+  bool Dump(::android::base::unique_fd dump_fd);
 
   // The MessageBuffer is inlined, since there's not much value to mocking
   // simple data objects. See Testing on the Toilet Episode 173.

@@ -14,10 +14,13 @@
  * limitations under the License.
  */
 
+#include <errno.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <memory>
 #include <string>
+#include <tuple>
 #include <utility>
 
 #include "android-base/unique_fd.h"
@@ -38,6 +41,11 @@ namespace {
 using ::android::base::unique_fd;
 using ::testing::_;
 using ::testing::AnyNumber;
+using ::testing::AtLeast;
+using ::testing::HasSubstr;
+using ::testing::Invoke;
+using ::testing::Return;
+using ::testing::StartsWith;
 using ::testing::StrictMock;
 using local_utils::GetMaxVal;
 
@@ -47,6 +55,7 @@ using local_utils::GetMaxVal;
 using CommandBuffer = ByteBuffer<protocol::kMaxMessageSize * 2>;
 
 constexpr size_t kBufferSizeBytes = protocol::kMaxMessageSize * 16;
+constexpr char kLogRecordSeparator = '\n';
 constexpr size_t kMaxAsciiMessagePayloadLen = protocol::kMaxMessageSize -
                                               sizeof(protocol::Command) -
                                               sizeof(protocol::AsciiMessage);
@@ -116,6 +125,18 @@ class CommandProcessorTest : public ::testing::Test {
 
   bool SendAsciiMessage(const std::string& tag, const std::string& message) {
     return SendAsciiMessageWithSizeAdjustments(tag, message, 0, 0, 0);
+  }
+
+  bool SendDumpBuffers() {
+    protocol::Command command{};
+    command.opcode = protocol::Opcode::kDumpBuffers;
+    command.payload_len = 0;
+
+    CommandBuffer buf;
+    buf.AppendOrDie(&command, sizeof(command));
+
+    constexpr int kFakeFd = 100;
+    return command_processor_->ProcessCommand(buf.data(), buf.size(), kFakeFd);
   }
 
   std::unique_ptr<CommandProcessor> command_processor_;
@@ -189,6 +210,115 @@ TEST_F(CommandProcessorTest, ProcessCommandSucceedsEvenAfterFillingBuffer) {
        cumulative_payload_bytes += (tag.size() + message.size())) {
     EXPECT_TRUE(SendAsciiMessage(tag, message));
   }
+}
+
+TEST_F(CommandProcessorTest,
+       ProcessCommandDumpBuffersOutputIncludesCorrectlyFormattedTimestamps) {
+  const CommandBuffer& command_buf(BuildAsciiMessageCommand("tag", "message"));
+  EXPECT_CALL(*os_, GetTimestamp(CLOCK_MONOTONIC))
+      .WillOnce(Return(Os::Timestamp{0, 999}));
+  EXPECT_CALL(*os_, GetTimestamp(CLOCK_BOOTTIME))
+      .WillOnce(Return(Os::Timestamp{1, 1000}));
+  EXPECT_CALL(*os_, GetTimestamp(CLOCK_REALTIME))
+      .WillOnce(Return(Os::Timestamp{123456, 123456000}));
+  EXPECT_TRUE(command_processor_->ProcessCommand(
+      command_buf.data(), command_buf.size(), Os::kInvalidFd));
+
+  std::string written_to_os;
+  EXPECT_CALL(*os_, Write(_, _, _))
+      .Times(AtLeast(1))
+      .WillRepeatedly(Invoke(
+          [&written_to_os](int /*fd*/, const void* write_buf, size_t buflen) {
+            written_to_os.append(static_cast<const char*>(write_buf), buflen);
+            return std::tuple<size_t, Os::Errno>(buflen, 0);
+          }));
+  EXPECT_TRUE(SendDumpBuffers());
+  EXPECT_THAT(written_to_os, StartsWith("0.000000 1.000001 123456.123456"));
+}
+
+TEST_F(CommandProcessorTest, ProcessCommandDumpBuffersSucceedsOnEmptyLog) {
+  EXPECT_CALL(*os_, Write(_, _, _)).Times(0);
+  EXPECT_TRUE(SendDumpBuffers());
+}
+
+TEST_F(CommandProcessorTest, ProcessCommandDumpBuffersIncludesAllMessages) {
+  constexpr int kNumMessages = 5;
+  for (size_t i = 0; i < kNumMessages; ++i) {
+    ASSERT_TRUE(SendAsciiMessage("tag", "message"));
+  }
+
+  std::string written_to_os;
+  EXPECT_CALL(*os_, Write(_, _, _))
+      .WillRepeatedly(Invoke(
+          [&written_to_os](int /*fd*/, const void* write_buf, size_t buflen) {
+            written_to_os.append(static_cast<const char*>(write_buf), buflen);
+            return std::tuple<size_t, Os::Errno>(buflen, 0);
+          }));
+  EXPECT_TRUE(SendDumpBuffers());
+  EXPECT_EQ(kNumMessages, std::count(written_to_os.begin(), written_to_os.end(),
+                                     kLogRecordSeparator));
+}
+
+TEST_F(CommandProcessorTest, ProcessCommandDumpBuffersStopsAfterFirstError) {
+  ASSERT_TRUE(SendAsciiMessage("tag", "message"));
+  ASSERT_TRUE(SendAsciiMessage("tag", "message"));
+
+  EXPECT_CALL(*os_, Write(_, _, _))
+      .WillOnce(Return(std::tuple<size_t, Os::Errno>{-1, EBADF}));
+  ASSERT_FALSE(SendDumpBuffers());
+}
+
+TEST_F(CommandProcessorTest, ProcessCommandDumpBuffersContinuesPastEintr) {
+  constexpr int kNumMessages = 5;
+  for (size_t i = 0; i < kNumMessages; ++i) {
+    ASSERT_TRUE(SendAsciiMessage("tag", "message"));
+  }
+
+  std::string written_to_os;
+  EXPECT_CALL(*os_, Write(_, _, _))
+      .WillRepeatedly(Invoke(
+          [&written_to_os](int /*fd*/, const void* write_buf, size_t buflen) {
+            written_to_os.append(static_cast<const char*>(write_buf), buflen);
+            return std::tuple<size_t, Os::Errno>{buflen / 2, EINTR};
+          }));
+  EXPECT_TRUE(SendDumpBuffers());
+  EXPECT_EQ(kNumMessages, std::count(written_to_os.begin(), written_to_os.end(),
+                                     kLogRecordSeparator));
+}
+
+TEST_F(CommandProcessorTest, ProcessCommandDumpBuffersIsIdempotent) {
+  ASSERT_TRUE(SendAsciiMessage("tag", "message"));
+
+  std::string written_to_os;
+  EXPECT_CALL(*os_, Write(_, _, _))
+      .WillRepeatedly(Invoke(
+          [&written_to_os](int /*fd*/, const void* write_buf, size_t buflen) {
+            written_to_os.append(static_cast<const char*>(write_buf), buflen);
+            return std::tuple<size_t, Os::Errno>(buflen, 0);
+          }));
+  ASSERT_TRUE(SendDumpBuffers());
+  ASSERT_GT(written_to_os.size(), 0U);
+  written_to_os.clear();
+
+  ASSERT_EQ(0U, written_to_os.size());
+  EXPECT_TRUE(SendDumpBuffers());
+  EXPECT_GT(written_to_os.size(), 0U);
+}
+
+TEST_F(CommandProcessorTest,
+       ProcessCommandDumpBuffersIsIdempotentEvenWithWriteFailure) {
+  ASSERT_TRUE(SendAsciiMessage("tag", "message"));
+  EXPECT_CALL(*os_, Write(_, _, _))
+      .WillOnce(Return(std::tuple<size_t, Os::Errno>{-1, EBADF}));
+  ASSERT_FALSE(SendDumpBuffers());
+
+  EXPECT_CALL(*os_, Write(_, _, _))
+      .Times(AtLeast(1))
+      .WillRepeatedly(
+          Invoke([](int /*fd*/, const void* /*write_buf*/, size_t buflen) {
+            return std::tuple<size_t, Os::Errno>(buflen, 0);
+          }));
+  EXPECT_TRUE(SendDumpBuffers());
 }
 
 // Strictly speaking, this is not a unit test. But there's no easy way to get
