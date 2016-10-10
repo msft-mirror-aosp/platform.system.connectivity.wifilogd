@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <limits>
 
+#include "android-base/stringprintf.h"
 #include "gtest/gtest.h"
 
 #include "wifilogd/local_utils.h"
@@ -26,6 +27,7 @@ namespace wifilogd {
 
 using local_utils::CopyFromBufferOrDie;
 using local_utils::GetMaxVal;
+using local_utils::IsAsciiPrintable;
 
 TEST(LocalUtilsTest, CopyFromBufferOrDieCopiesData) {
   struct Message {
@@ -65,6 +67,51 @@ TEST(LocalUtilsTest, GetMaxValFromInstanceIsCorrectForSignedTypes) {
   EXPECT_EQ(std::numeric_limits<int16_t>::max(), GetMaxVal(int16_t{}));
   EXPECT_EQ(std::numeric_limits<int32_t>::max(), GetMaxVal(int32_t{}));
   EXPECT_EQ(std::numeric_limits<int64_t>::max(), GetMaxVal(int64_t{}));
+}
+
+TEST(LocalUtilsTest, IsAsciiPrintableReturnsTrueForAlphabeticCharacters) {
+  for (const char c : {'a', 'z', 'A', 'Z'}) {
+    EXPECT_TRUE(IsAsciiPrintable(c)) << "Failed with: c == '" << c << "'";
+  }
+}
+
+TEST(LocalUtilsTest, IsAsciiPrintableReturnsTrueForNumericCharacters) {
+  for (const char c : {'0', '9'}) {
+    EXPECT_TRUE(IsAsciiPrintable(c)) << "Failed with: c == '" << c << "'";
+  }
+}
+
+TEST(LocalUtilsTest, IsAsciiPrintableReturnsTrueForPrintableSpaces) {
+  for (const char c : {'\n', '\t', ' '}) {
+    EXPECT_TRUE(IsAsciiPrintable(c))
+        << base::StringPrintf("Failed with: c == 0x%02d", c);
+  }
+}
+
+TEST(LocalUtilsTest, IsAsciiPrintableReturnsTrueForMaximalPrintable) {
+  EXPECT_TRUE(IsAsciiPrintable('~'));
+}
+
+TEST(LocalUtilsTest, IsAsciiPrintableReturnsFalseForUnprintableSpaces) {
+  for (const char c : {'\f', '\r', '\v'}) {
+    EXPECT_FALSE(IsAsciiPrintable(c))
+        << base::StringPrintf("Failed with: c == 0x%02d", c);
+  }
+}
+
+TEST(LocalUtilsTest, IsAsciiPrintableReturnsFalseForNeighborsOfPrintables) {
+  for (const char c : {char{0x1f}, char{0x7f}}) {
+    EXPECT_FALSE(IsAsciiPrintable(c))
+        << base::StringPrintf("Failed with: c == 0x%02d", c);
+  }
+}
+
+TEST(LocalUtilsTest, IsAsciiPrintableReturnsFalseForMinimalAndMaximalChars) {
+  using uchar = unsigned char;
+  for (const uchar c : {uchar{0x00}, uchar{0xff}}) {
+    EXPECT_FALSE(IsAsciiPrintable(c))
+        << base::StringPrintf("Failed with: c == 0x%02d", c);
+  }
 }
 
 TEST(LocalUtilsTest, SafelyClampWorksForSameTypeClamping) {
