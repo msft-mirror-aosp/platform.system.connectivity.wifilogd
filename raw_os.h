@@ -36,6 +36,9 @@ class RawOs {
   virtual int ClockGettime(clockid_t clock_id,
                            NONNULL struct timespec* tspec) const;
 
+  // See write().
+  virtual ssize_t Write(int fd, const void* buf, size_t buflen);
+
  private:
   DISALLOW_COPY_AND_ASSIGN(RawOs);
 };
