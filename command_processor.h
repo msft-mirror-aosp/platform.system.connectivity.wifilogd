@@ -38,9 +38,18 @@ class CommandProcessor {
   // This method allows tests to provide a MockOs.
   CommandProcessor(size_t buffer_size_bytes, std::unique_ptr<Os> os);
 
-  // Processes the given command. The effect of this call depends on the
-  // contents of |input_buf|.
-  bool ProcessInput(NONNULL const void* input_buf, size_t n_bytes_read);
+  // Processes the given command, with the given file descriptor. The effect of
+  // this call depends on the contents of |input_buf|. In particular, depending
+  // on the command, |fd| may be used for reading or writing, or |fd| may be
+  // ignored. However, |fd| is guaranteed to be closed before ProcessCommand()
+  // returns, in all cases.
+  //
+  // (Ideally, we might want to take |fd| as a unique_fd. Unfortunately,
+  // GoogleMock doesn't deal well with move-only parameters. And we'll
+  // want to mock this method, eventually.
+  // https://github.com/google/googletest/issues/395)
+  bool ProcessCommand(NONNULL const void* input_buf, size_t n_bytes_read,
+                      int fd);
 
  private:
   struct TimestampHeader {
