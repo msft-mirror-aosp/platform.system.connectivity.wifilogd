@@ -46,6 +46,8 @@ class Os {
     uint32_t nsecs;
   };
 
+  static constexpr int kInvalidFd = -1;
+
   // Constructs an Os instance.
   Os();
 

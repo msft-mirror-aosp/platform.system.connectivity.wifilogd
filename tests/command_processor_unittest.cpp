@@ -14,10 +14,13 @@
  * limitations under the License.
  */
 
+#include <unistd.h>
+
 #include <memory>
 #include <string>
 #include <utility>
 
+#include "android-base/unique_fd.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
@@ -32,6 +35,9 @@ namespace android {
 namespace wifilogd {
 namespace {
 
+using ::android::base::unique_fd;
+using ::testing::_;
+using ::testing::AnyNumber;
 using ::testing::StrictMock;
 using local_utils::GetMaxVal;
 
@@ -104,8 +110,8 @@ class CommandProcessorTest : public ::testing::Test {
     EXPECT_CALL(*os_, GetTimestamp(CLOCK_MONOTONIC));
     EXPECT_CALL(*os_, GetTimestamp(CLOCK_BOOTTIME));
     EXPECT_CALL(*os_, GetTimestamp(CLOCK_REALTIME));
-    return command_processor_->ProcessInput(command_buffer.data(),
-                                            command_buffer.size());
+    return command_processor_->ProcessCommand(
+        command_buffer.data(), command_buffer.size(), Os::kInvalidFd);
   }
 
   bool SendAsciiMessage(const std::string& tag, const std::string& message) {
@@ -121,61 +127,61 @@ class CommandProcessorTest : public ::testing::Test {
 }  // namespace
 
 // A valid ASCII message should, of course, be processed successfully.
-TEST_F(CommandProcessorTest, ProcessInputOnValidAsciiMessageSucceeds) {
+TEST_F(CommandProcessorTest, ProcessCommandOnValidAsciiMessageSucceeds) {
   EXPECT_TRUE(SendAsciiMessage("tag", "message"));
 }
 
-// If the buffer given to ProcessInput() is shorter than a protocol::Command,
+// If the buffer given to ProcessCommand() is shorter than a protocol::Command,
 // then we discard the data.
 TEST_F(CommandProcessorTest,
-       ProcessInputOnAsciiMessageShorterThanCommandFails) {
+       ProcessCommandOnAsciiMessageShorterThanCommandFails) {
   const CommandBuffer& command_buffer(
       BuildAsciiMessageCommand("tag", "message"));
-  EXPECT_FALSE(command_processor_->ProcessInput(command_buffer.data(),
-                                                sizeof(protocol::Command) - 1));
+  EXPECT_FALSE(command_processor_->ProcessCommand(
+      command_buffer.data(), sizeof(protocol::Command) - 1, Os::kInvalidFd));
 }
 
 // In all other cases, we save the data we got, and will try to salvage the
 // contents when dumping.
-TEST_F(CommandProcessorTest, ProcessInputOnAsciiMessageWithEmtpyTagSucceeds) {
+TEST_F(CommandProcessorTest, ProcessCommandOnAsciiMessageWithEmtpyTagSucceeds) {
   EXPECT_TRUE(SendAsciiMessage("", "message"));
 }
 
 TEST_F(CommandProcessorTest,
-       ProcessInputOnAsciiMessageWithEmptyMessageSucceeds) {
+       ProcessCommandOnAsciiMessageWithEmptyMessageSucceeds) {
   EXPECT_TRUE(SendAsciiMessage("tag", ""));
 }
 
 TEST_F(CommandProcessorTest,
-       ProcessInputOnAsciiMessageWithEmptyTagAndMessageSucceeds) {
+       ProcessCommandOnAsciiMessageWithEmptyTagAndMessageSucceeds) {
   EXPECT_TRUE(SendAsciiMessage("", ""));
 }
 
 TEST_F(CommandProcessorTest,
-       ProcessInputOnAsciiMessageWithBadCommandLengthSucceeds) {
+       ProcessCommandOnAsciiMessageWithBadCommandLengthSucceeds) {
   EXPECT_TRUE(SendAsciiMessageWithSizeAdjustments("tag", "message", 1, 0, 0));
   EXPECT_TRUE(SendAsciiMessageWithSizeAdjustments("tag", "message", -1, 0, 0));
 }
 
 TEST_F(CommandProcessorTest,
-       ProcessInputOnAsciiMessageWithBadTagLengthSucceeds) {
+       ProcessCommandOnAsciiMessageWithBadTagLengthSucceeds) {
   EXPECT_TRUE(SendAsciiMessageWithSizeAdjustments("tag", "message", 0, 1, 0));
   EXPECT_TRUE(SendAsciiMessageWithSizeAdjustments("tag", "message", 0, -1, 0));
 }
 
 TEST_F(CommandProcessorTest,
-       ProcessInputOnAsciiMessageWithBadMessageLengthSucceeds) {
+       ProcessCommandOnAsciiMessageWithBadMessageLengthSucceeds) {
   EXPECT_TRUE(SendAsciiMessageWithSizeAdjustments("tag", "message", 0, 0, 1));
   EXPECT_TRUE(SendAsciiMessageWithSizeAdjustments("tag", "message", 0, 0, -1));
 }
 
-TEST_F(CommandProcessorTest, ProcessInputOnOverlyLargeAsciiMessageSucceeds) {
+TEST_F(CommandProcessorTest, ProcessCommandOnOverlyLargeAsciiMessageSucceeds) {
   const std::string tag{"tag"};
   EXPECT_TRUE(SendAsciiMessage(
       tag, std::string(kMaxAsciiMessagePayloadLen - tag.size() + 1, '.')));
 }
 
-TEST_F(CommandProcessorTest, ProcessInputSucceedsEvenAfterFillingBuffer) {
+TEST_F(CommandProcessorTest, ProcessCommandSucceedsEvenAfterFillingBuffer) {
   const std::string tag{"tag"};
   const std::string message(kMaxAsciiMessagePayloadLen - tag.size(), '.');
   for (size_t cumulative_payload_bytes = 0;
@@ -183,6 +189,38 @@ TEST_F(CommandProcessorTest, ProcessInputSucceedsEvenAfterFillingBuffer) {
        cumulative_payload_bytes += (tag.size() + message.size())) {
     EXPECT_TRUE(SendAsciiMessage(tag, message));
   }
+}
+
+// Strictly speaking, this is not a unit test. But there's no easy way to get
+// unique_fd to call on an instance of our Os.
+TEST_F(CommandProcessorTest, ProcessCommandClosesFd) {
+  int pipe_fds[2];
+  ASSERT_EQ(0, pipe(pipe_fds));
+
+  const unique_fd our_fd{pipe_fds[0]};
+  const int their_fd = pipe_fds[1];
+  const CommandBuffer& command_buffer(
+      BuildAsciiMessageCommand("tag", "message"));
+  EXPECT_CALL(*os_, GetTimestamp(_)).Times(AnyNumber());
+  EXPECT_TRUE(command_processor_->ProcessCommand(
+      command_buffer.data(), command_buffer.size(), their_fd));
+  EXPECT_EQ(-1, close(their_fd));
+  EXPECT_EQ(EBADF, errno);
+}
+
+// Strictly speaking, this is not a unit test. But there's no easy way to get
+// unique_fd to call on an instance of our Os.
+TEST_F(CommandProcessorTest, ProcessCommandClosesFdEvenOnFailure) {
+  int pipe_fds[2];
+  ASSERT_EQ(0, pipe(pipe_fds));
+
+  const unique_fd our_fd{pipe_fds[0]};
+  const int their_fd = pipe_fds[1];
+  const CommandBuffer command_buffer;
+  EXPECT_FALSE(command_processor_->ProcessCommand(
+      command_buffer.data(), command_buffer.size(), their_fd));
+  EXPECT_EQ(-1, close(their_fd));
+  EXPECT_EQ(EBADF, errno);
 }
 
 }  // namespace wifilogd
