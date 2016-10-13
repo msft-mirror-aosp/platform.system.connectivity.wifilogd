@@ -17,6 +17,8 @@
 #ifndef TESTS_MOCK_OS_H_
 #define TESTS_MOCK_OS_H_
 
+#include <tuple>
+
 #include "android-base/macros.h"
 #include "gmock/gmock.h"
 
@@ -31,6 +33,8 @@ class MockOs : public Os {
   ~MockOs() override;
 
   MOCK_CONST_METHOD1(GetTimestamp, Timestamp(clockid_t clock_id));
+  MOCK_METHOD3(Write, std::tuple<size_t, Os::Errno>(int fd, const void* buf,
+                                                    size_t buflen));
 
  private:
   DISALLOW_COPY_AND_ASSIGN(MockOs);
