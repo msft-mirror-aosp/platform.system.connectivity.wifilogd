@@ -21,6 +21,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <tuple>
 #include <utility>
 
 #include "android-base/macros.h"
@@ -38,6 +39,8 @@ namespace wifilogd {
 // 3. Provide interfaces that as easier to use, than the underlying OS calls.
 class Os {
  public:
+  using Errno = int;
+
   struct Timestamp {
     uint32_t secs;  // Sufficient through 2100.
     uint32_t nsecs;
@@ -54,6 +57,16 @@ class Os {
 
   // Returns the current time, as reported by the clock with |clock_id|.
   virtual Timestamp GetTimestamp(clockid_t clock_id) const;
+
+  // Writes |buflen| bytes from |buf| to |fd|. Returns the number of bytes
+  // written, and the result of the operation (0 for success, |errno|
+  // otherwise).
+  //
+  // Notes:
+  // - |buflen| may not exceed the maximal value for ssize_t.
+  // - The returned size_t will not exceed |buflen|.
+  virtual std::tuple<size_t, Errno> Write(int fd, const void* buf,
+                                          size_t buflen);
 
  private:
   const std::unique_ptr<RawOs> raw_os_;
