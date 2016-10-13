@@ -15,6 +15,7 @@
  */
 
 #include <time.h>
+#include <unistd.h>
 
 #include "wifilogd/raw_os.h"
 
@@ -30,6 +31,10 @@ RawOs::~RawOs() {}
 
 int RawOs::ClockGettime(clockid_t clock_id, struct timespec* ts) const {
   return clock_gettime(clock_id, ts);
+}
+
+ssize_t RawOs::Write(int fd, const void* buf, size_t buflen) {
+  return write(fd, buf, buflen);
 }
 
 }  // namespace wifilogd
