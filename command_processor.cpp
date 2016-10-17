@@ -14,11 +14,15 @@
  * limitations under the License.
  */
 
+#include <string.h>
+
 #include <cinttypes>
+#include <string>
+#include <tuple>
 #include <utility>
 
 #include "android-base/logging.h"
-#include "android-base/unique_fd.h"
+#include "android-base/stringprintf.h"
 
 #include "wifilogd/byte_buffer.h"
 #include "wifilogd/command_processor.h"
@@ -32,6 +36,10 @@ using ::android::base::unique_fd;
 
 using local_utils::CopyFromBufferOrDie;
 using local_utils::GetMaxVal;
+
+namespace {
+uint32_t NsecToUsec(uint32_t nsec) { return nsec / 1000; }
+}  // namespace
 
 CommandProcessor::CommandProcessor(size_t buffer_size_bytes)
     : current_log_buffer_(buffer_size_bytes), os_(new Os()) {}
@@ -61,10 +69,26 @@ bool CommandProcessor::ProcessCommand(const void* input_buffer,
       // the common case, the validation cost is actually eliminated,
       // rather than just deferred.
       return CopyCommandToLog(input_buffer, n_bytes_read);
+    case Opcode::kDumpBuffers:
+      return Dump(std::move(wrapped_fd));
   }
 }
 
 // Private methods below.
+
+std::string CommandProcessor::TimestampHeader::ToString() const {
+  const auto& awake_time = since_boot_awake_only;
+  const auto& up_time = since_boot_with_sleep;
+  const auto& wall_time = since_epoch;
+  return base::StringPrintf("%" PRIu32 ".%06" PRIu32
+                            " "
+                            "%" PRIu32 ".%06" PRIu32
+                            " "
+                            "%" PRIu32 ".%06" PRIu32,
+                            awake_time.secs, NsecToUsec(awake_time.nsecs),
+                            up_time.secs, NsecToUsec(up_time.nsecs),
+                            wall_time.secs, NsecToUsec(wall_time.nsecs));
+}
 
 bool CommandProcessor::CopyCommandToLog(const void* command_buffer,
                                         size_t command_len_in) {
@@ -105,6 +129,45 @@ bool CommandProcessor::CopyCommandToLog(const void* command_buffer,
     // have succeeded. Hence, a failure here indicates a logic error,
     // rather than a runtime error.
     LOG(FATAL) << "Unexpected failure to Append()";
+  }
+
+  return true;
+}
+
+bool CommandProcessor::Dump(unique_fd dump_fd) {
+  const uint8_t* buf = nullptr;
+  size_t buflen = 0;
+  static_assert(
+      GetMaxVal(buflen) - sizeof(TimestampHeader) - sizeof(protocol::Command) >=
+          GetMaxVal<decltype(protocol::Command::payload_len)>(),
+      "buflen cannot accommodate some messages");
+
+  MessageBuffer::ScopedRewinder rewinder(&current_log_buffer_);
+  std::tie(buf, buflen) = current_log_buffer_.ConsumeNextMessage();
+  while (buf) {
+    const auto& tstamp_header =
+        CopyFromBufferOrDie<TimestampHeader>(buf, buflen);
+    buf += sizeof(tstamp_header);
+    buflen -= sizeof(tstamp_header);
+
+    const std::string timestamp_string(tstamp_header.ToString() + '\n');
+    size_t n_written;
+    Os::Errno err;
+    std::tie(n_written, err) =
+        os_->Write(dump_fd, timestamp_string.data(), timestamp_string.size());
+    if (err == EINTR) {
+      // The next write will probably succeed. We dont't retry the current
+      // message, however, because we want to guarantee forward progress.
+      //
+      // TODO(b/32098735): Increment a counter, and attempt to output that
+      // counter after we've dumped all the log messages.
+    } else if (err) {
+      // Any error other than EINTR is considered unrecoverable.
+      LOG(ERROR) << "Terminating log dump, due to " << strerror(err);
+      return false;
+    }
+
+    std::tie(buf, buflen) = current_log_buffer_.ConsumeNextMessage();
   }
 
   return true;
