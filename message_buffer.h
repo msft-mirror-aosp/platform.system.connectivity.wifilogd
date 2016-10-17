@@ -32,6 +32,18 @@ namespace wifilogd {
 // a sequence of messages.
 class MessageBuffer {
  public:
+  // A wrapper which guarantees that a MessageBuffer will be rewound,
+  // when the program exits the wrapper's scope. The user must ensure that
+  // |buffer| does not expire before the ScopedRewinder.
+  class ScopedRewinder {
+   public:
+    explicit ScopedRewinder(NONNULL MessageBuffer* buffer) : buffer_(buffer) {}
+    ~ScopedRewinder() { buffer_->Rewind(); }
+
+   private:
+    MessageBuffer* const buffer_;
+  };
+
   // Constructs the buffer. |size| must be greater than GetHeaderSize().
   explicit MessageBuffer(size_t size);
 

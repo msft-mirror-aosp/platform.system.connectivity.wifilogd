@@ -39,6 +39,7 @@ constexpr size_t kMaxMessageSize = 4096;
 
 enum class Opcode : uint16_t {
   kWriteAsciiMessage,
+  kDumpBuffers = 0x20,
 };
 
 enum class MessageSeverity : uint8_t {

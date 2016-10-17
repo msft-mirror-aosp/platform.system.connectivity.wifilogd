@@ -90,6 +90,7 @@ TEST(ProtocolTest, OpcodesAreUnchanged) {
   using protocol::Opcode;
   EXPECT_EQ(2U, sizeof(Opcode));
   EXPECT_EQ(0U, static_cast<uint16_t>(Opcode::kWriteAsciiMessage));
+  EXPECT_EQ(0x20U, static_cast<uint16_t>(Opcode::kDumpBuffers));
 }
 
 }  // namespace wifilogd
