@@ -60,7 +60,7 @@ void MessageBuffer::Clear() {
 }
 
 std::tuple<const uint8_t*, size_t> MessageBuffer::ConsumeNextMessage() {
-  if (read_pos_ >= write_pos_) {
+  if (read_pos_ == write_pos_) {
     return {nullptr, 0};
   }
 
@@ -70,7 +70,7 @@ std::tuple<const uint8_t*, size_t> MessageBuffer::ConsumeNextMessage() {
 
   const uint8_t* payload_start = data_.get() + read_pos_;
   read_pos_ += header.payload_len;
-  CHECK(read_pos_ <= capacity_);
+  CHECK(read_pos_ <= write_pos_);
 
   return {payload_start, header.payload_len};
 }
@@ -88,6 +88,7 @@ void MessageBuffer::AppendHeader(uint16_t message_len) {
 void MessageBuffer::AppendRawBytes(const void* data_start, size_t data_len) {
   std::memcpy(data_.get() + write_pos_, data_start, data_len);
   write_pos_ += data_len;
+  CHECK(write_pos_ <= capacity_);
 }
 
 }  // namespace wifilogd
