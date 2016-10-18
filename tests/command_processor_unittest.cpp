@@ -69,26 +69,28 @@ class CommandProcessorTest : public ::testing::Test {
   }
 
  protected:
-  CommandBuffer BuildAsciiMessageCommandWithSizeAdjustments(
+  CommandBuffer BuildAsciiMessageCommandWithAdjustments(
       const std::string& tag, const std::string& message,
-      ssize_t command_size_adjustment, ssize_t tag_size_adjustment,
-      ssize_t message_size_adjustment) {
+      ssize_t command_payload_len_adjustment,
+      ssize_t ascii_message_tag_len_adjustment,
+      ssize_t ascii_message_data_len_adjustment) {
     protocol::AsciiMessage ascii_message_header;
     constexpr auto kMaxTagLength = GetMaxVal(ascii_message_header.tag_len);
     constexpr auto kMaxDataLength = GetMaxVal(ascii_message_header.data_len);
     EXPECT_TRUE(tag.length() <= kMaxTagLength);
     EXPECT_TRUE(message.length() <= kMaxDataLength);
-    ascii_message_header.tag_len = SAFELY_CLAMP(
-        tag.length() + tag_size_adjustment, uint8_t, 0, kMaxTagLength);
+    ascii_message_header.tag_len =
+        SAFELY_CLAMP(tag.length() + ascii_message_tag_len_adjustment, uint8_t,
+                     0, kMaxTagLength);
     ascii_message_header.data_len =
-        SAFELY_CLAMP(message.length() + message_size_adjustment, uint16_t, 0,
-                     kMaxDataLength);
+        SAFELY_CLAMP(message.length() + ascii_message_data_len_adjustment,
+                     uint16_t, 0, kMaxDataLength);
     ascii_message_header.severity = protocol::MessageSeverity::kError;
 
     protocol::Command command{};
     constexpr auto kMaxPayloadLength = GetMaxVal(command.payload_len);
     size_t payload_length = sizeof(ascii_message_header) + tag.length() +
-                            message.length() + command_size_adjustment;
+                            message.length() + command_payload_len_adjustment;
     EXPECT_TRUE(payload_length <= kMaxPayloadLength);
     command.opcode = protocol::Opcode::kWriteAsciiMessage;
     command.payload_len =
@@ -104,18 +106,17 @@ class CommandProcessorTest : public ::testing::Test {
 
   CommandBuffer BuildAsciiMessageCommand(const std::string& tag,
                                          const std::string& message) {
-    return BuildAsciiMessageCommandWithSizeAdjustments(tag, message, 0, 0, 0);
+    return BuildAsciiMessageCommandWithAdjustments(tag, message, 0, 0, 0);
   }
 
-  bool SendAsciiMessageWithSizeAdjustments(const std::string& tag,
-                                           const std::string& message,
-                                           ssize_t command_size_adjustment,
-                                           ssize_t tag_size_adjustment,
-                                           ssize_t message_size_adjustment) {
-    const CommandBuffer& command_buffer(
-        BuildAsciiMessageCommandWithSizeAdjustments(
-            tag, message, command_size_adjustment, tag_size_adjustment,
-            message_size_adjustment));
+  bool SendAsciiMessageWithAdjustments(
+      const std::string& tag, const std::string& message,
+      ssize_t command_payload_len_adjustment,
+      ssize_t ascii_message_tag_len_adjustment,
+      ssize_t ascii_message_data_len_adjustment) {
+    const CommandBuffer& command_buffer(BuildAsciiMessageCommandWithAdjustments(
+        tag, message, command_payload_len_adjustment,
+        ascii_message_tag_len_adjustment, ascii_message_data_len_adjustment));
     EXPECT_CALL(*os_, GetTimestamp(CLOCK_MONOTONIC));
     EXPECT_CALL(*os_, GetTimestamp(CLOCK_BOOTTIME));
     EXPECT_CALL(*os_, GetTimestamp(CLOCK_REALTIME));
@@ -124,7 +125,7 @@ class CommandProcessorTest : public ::testing::Test {
   }
 
   bool SendAsciiMessage(const std::string& tag, const std::string& message) {
-    return SendAsciiMessageWithSizeAdjustments(tag, message, 0, 0, 0);
+    return SendAsciiMessageWithAdjustments(tag, message, 0, 0, 0);
   }
 
   bool SendDumpBuffers() {
@@ -180,20 +181,20 @@ TEST_F(CommandProcessorTest,
 
 TEST_F(CommandProcessorTest,
        ProcessCommandOnAsciiMessageWithBadCommandLengthSucceeds) {
-  EXPECT_TRUE(SendAsciiMessageWithSizeAdjustments("tag", "message", 1, 0, 0));
-  EXPECT_TRUE(SendAsciiMessageWithSizeAdjustments("tag", "message", -1, 0, 0));
+  EXPECT_TRUE(SendAsciiMessageWithAdjustments("tag", "message", 1, 0, 0));
+  EXPECT_TRUE(SendAsciiMessageWithAdjustments("tag", "message", -1, 0, 0));
 }
 
 TEST_F(CommandProcessorTest,
        ProcessCommandOnAsciiMessageWithBadTagLengthSucceeds) {
-  EXPECT_TRUE(SendAsciiMessageWithSizeAdjustments("tag", "message", 0, 1, 0));
-  EXPECT_TRUE(SendAsciiMessageWithSizeAdjustments("tag", "message", 0, -1, 0));
+  EXPECT_TRUE(SendAsciiMessageWithAdjustments("tag", "message", 0, 1, 0));
+  EXPECT_TRUE(SendAsciiMessageWithAdjustments("tag", "message", 0, -1, 0));
 }
 
 TEST_F(CommandProcessorTest,
        ProcessCommandOnAsciiMessageWithBadMessageLengthSucceeds) {
-  EXPECT_TRUE(SendAsciiMessageWithSizeAdjustments("tag", "message", 0, 0, 1));
-  EXPECT_TRUE(SendAsciiMessageWithSizeAdjustments("tag", "message", 0, 0, -1));
+  EXPECT_TRUE(SendAsciiMessageWithAdjustments("tag", "message", 0, 0, 1));
+  EXPECT_TRUE(SendAsciiMessageWithAdjustments("tag", "message", 0, 0, -1));
 }
 
 TEST_F(CommandProcessorTest, ProcessCommandOnOverlyLargeAsciiMessageSucceeds) {
