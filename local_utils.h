@@ -51,6 +51,14 @@ namespace android {
 namespace wifilogd {
 namespace local_utils {
 
+// Returns the value in |enum_value|, as the integral type underlying the
+// enum. (E.g. uint8_t, int32_t, etc.)
+template <typename T>
+constexpr auto CastEnumToInteger(T enum_value) {
+  static_assert(std::is_enum<T>::value, "argument must be of an enum type");
+  return static_cast<typename std::underlying_type<T>::type>(enum_value);
+}
+
 // Copies a |T| out of |buf|, aborting if |buf| is too short to hold a |T|.
 //
 // As compared to accessing the underlying data using reinterpret_cast<>,
