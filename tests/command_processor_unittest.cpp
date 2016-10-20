@@ -22,6 +22,7 @@
 #include <memory>
 #include <string>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 
 #include "android-base/unique_fd.h"
@@ -212,6 +213,24 @@ TEST_F(CommandProcessorTest, ProcessCommandOnOverlyLargeAsciiMessageSucceeds) {
   const std::string tag{"tag"};
   EXPECT_TRUE(SendAsciiMessage(
       tag, std::string(kMaxAsciiMessagePayloadLen - tag.size() + 1, '.')));
+}
+
+TEST_F(CommandProcessorTest, ProcessCommandInvalidOpcodeReturnsFailure) {
+  using opcode_enum_t = decltype(protocol::Command::opcode);
+  using opcode_integral_t = std::underlying_type<opcode_enum_t>::type;
+  constexpr auto invalid_opcode = GetMaxVal<opcode_integral_t>();
+
+  protocol::Command command{};
+  command.opcode = local_utils::CopyFromBufferOrDie<opcode_enum_t>(
+      &invalid_opcode, sizeof(invalid_opcode));
+  command.payload_len = 0;
+
+  CommandBuffer buf;
+  buf.AppendOrDie(&command, sizeof(command));
+
+  constexpr int kFakeFd = 100;
+  EXPECT_FALSE(
+      command_processor_->ProcessCommand(buf.data(), buf.size(), kFakeFd));
 }
 
 TEST_F(CommandProcessorTest, ProcessCommandSucceedsEvenAfterFillingBuffer) {
