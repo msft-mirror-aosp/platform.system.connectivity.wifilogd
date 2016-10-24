@@ -70,6 +70,16 @@ TEST_F(ByteBufferTest, AssigningWorks) {
   EXPECT_EQ(0, std::memcmp(copy.data(), buffer_.data(), buffer_.size()));
 }
 
+TEST_F(ByteBufferTest, ChainingWorks) {
+  const std::string message1{"hello"};
+  const std::string message2{"world"};
+  buffer_.AppendOrDie(message1.data(), message1.size())
+      .AppendOrDie(message2.data(), message2.size());
+
+  const std::string expected{"helloworld"};
+  EXPECT_EQ(0, std::memcmp(buffer_.data(), expected.data(), expected.size()));
+}
+
 TEST_F(ByteBufferTest, CopyingWorks) {
   const std::string message1{"hello"};
   buffer_.AppendOrDie(message1.data(), message1.size());
@@ -103,9 +113,9 @@ TEST_F(ByteBufferTest, SizeIsCorrectAfterLargeWrite) {
 }
 
 TEST_F(ByteBufferTest, SizeIsCorrectAfterMultipleWrites) {
-  buffer_.AppendOrDie(kSmallestMessage.data(), kSmallestMessage.size());
-  buffer_.AppendOrDie(kSmallestMessage.data(), kSmallestMessage.size());
-  buffer_.AppendOrDie(kSmallestMessage.data(), kSmallestMessage.size());
+  buffer_.AppendOrDie(kSmallestMessage.data(), kSmallestMessage.size())
+      .AppendOrDie(kSmallestMessage.data(), kSmallestMessage.size())
+      .AppendOrDie(kSmallestMessage.data(), kSmallestMessage.size());
   EXPECT_EQ(3 * kSmallestMessage.size(), buffer_.size());
 }
 
