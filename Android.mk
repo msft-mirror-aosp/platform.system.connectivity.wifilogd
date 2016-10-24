@@ -33,6 +33,7 @@ LOCAL_CPPFLAGS := $(wifilogd_cpp_flags)
 LOCAL_C_INCLUDES := $(wifilogd_includes)
 LOCAL_SRC_FILES := \
     command_processor.cpp \
+    memory_reader.cpp \
     message_buffer.cpp \
     os.cpp \
     raw_os.cpp
@@ -53,6 +54,7 @@ LOCAL_SRC_FILES := \
     tests/command_processor_unittest.cpp \
     tests/local_utils_unittest.cpp \
     tests/main.cpp \
+    tests/memory_reader_unittest.cpp \
     tests/message_buffer_unittest.cpp \
     tests/mock_os.cpp \
     tests/mock_raw_os.cpp \
