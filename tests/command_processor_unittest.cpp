@@ -106,12 +106,11 @@ class CommandProcessorTest : public ::testing::Test {
     command.payload_len =
         SAFELY_CLAMP(payload_length, uint16_t, 0, kMaxPayloadLength);
 
-    CommandBuffer buf;
-    buf.AppendOrDie(&command, sizeof(command));
-    buf.AppendOrDie(&ascii_message_header, sizeof(ascii_message_header));
-    buf.AppendOrDie(tag.data(), tag.length());
-    buf.AppendOrDie(message.data(), message.length());
-    return buf;
+    return CommandBuffer()
+        .AppendOrDie(&command, sizeof(command))
+        .AppendOrDie(&ascii_message_header, sizeof(ascii_message_header))
+        .AppendOrDie(tag.data(), tag.length())
+        .AppendOrDie(message.data(), message.length());
   }
 
   CommandBuffer BuildAsciiMessageCommand(const std::string& tag,
@@ -144,9 +143,7 @@ class CommandProcessorTest : public ::testing::Test {
     command.opcode = protocol::Opcode::kDumpBuffers;
     command.payload_len = 0;
 
-    CommandBuffer buf;
-    buf.AppendOrDie(&command, sizeof(command));
-
+    const auto& buf = CommandBuffer().AppendOrDie(&command, sizeof(command));
     constexpr int kFakeFd = 100;
     return command_processor_->ProcessCommand(buf.data(), buf.size(), kFakeFd);
   }
@@ -225,9 +222,7 @@ TEST_F(CommandProcessorTest, ProcessCommandInvalidOpcodeReturnsFailure) {
       &invalid_opcode, sizeof(invalid_opcode));
   command.payload_len = 0;
 
-  CommandBuffer buf;
-  buf.AppendOrDie(&command, sizeof(command));
-
+  const auto& buf = CommandBuffer().AppendOrDie(&command, sizeof(command));
   constexpr int kFakeFd = 100;
   EXPECT_FALSE(
       command_processor_->ProcessCommand(buf.data(), buf.size(), kFakeFd));
