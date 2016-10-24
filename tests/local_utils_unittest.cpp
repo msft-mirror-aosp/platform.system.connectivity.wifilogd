@@ -25,9 +25,25 @@
 namespace android {
 namespace wifilogd {
 
+using local_utils::CastEnumToInteger;
 using local_utils::CopyFromBufferOrDie;
 using local_utils::GetMaxVal;
 using local_utils::IsAsciiPrintable;
+
+TEST(LocalUtilsTest, CastEnumToIntegerWorksForValidEnumValues) {
+  enum class basic_enum { VALUE0, VALUE1 };
+  EXPECT_EQ(0, CastEnumToInteger(basic_enum::VALUE0));
+  EXPECT_EQ(1, CastEnumToInteger(basic_enum::VALUE1));
+}
+
+TEST(LocalUtilsTest, CastEnumToIntegerWorksForInvalidEnumValues) {
+  enum class basic_enum : int { VALUE0, VALUE1 };
+  constexpr int invalid_enum_value = 2;
+  EXPECT_EQ(0, CastEnumToInteger(basic_enum::VALUE0));
+  EXPECT_EQ(1, CastEnumToInteger(basic_enum::VALUE1));
+  EXPECT_EQ(2, CastEnumToInteger(CopyFromBufferOrDie<basic_enum>(
+                   &invalid_enum_value, sizeof(invalid_enum_value))));
+}
 
 TEST(LocalUtilsTest, CopyFromBufferOrDieCopiesData) {
   struct Message {
