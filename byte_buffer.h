@@ -31,10 +31,10 @@ namespace wifilogd {
 // The buffer tracks its (populated) size, and does not require dynamic
 // memory allocation.
 //
-// Typical usage would be as follows:
-//     ByteBuffer buffer;
-//     buffer.AppendOrDie(header.data(), header.size());
-//     buffer.AppendOrDie(body.data(), body.size());
+// Usage could be as follows:
+//     const auto& buffer = ByteBuffer<1024>()
+//         .AppendOrDie(header.data(), header.size())
+//         .AppendOrDie(body.data(), body.size());
 //     write(fd, buffer.data(), buffer.size());
 template <size_t SizeBytes>
 class ByteBuffer {
@@ -42,11 +42,14 @@ class ByteBuffer {
   ByteBuffer() : write_pos_(0) {}
 
   // Appends data to the end of this buffer. Aborts if the available
-  // space in the buffer is less than |data_len|.
-  void AppendOrDie(NONNULL const void* data, size_t data_len) {
+  // space in the buffer is less than |data_len|. Returns a reference to
+  // the ByteBuffer, to support chaining.
+  ByteBuffer<SizeBytes>& AppendOrDie(NONNULL const void* data,
+                                     size_t data_len) {
     CHECK(data_len <= raw_buffer_.size() - write_pos_);
     std::memcpy(raw_buffer_.data() + write_pos_, data, data_len);
     write_pos_ += data_len;
+    return *this;
   }
 
   // Returns a pointer to the head of this buffer.
