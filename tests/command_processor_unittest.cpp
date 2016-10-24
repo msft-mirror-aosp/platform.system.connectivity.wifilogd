@@ -64,6 +64,13 @@ class CommandProcessorTest : public ::testing::Test {
  public:
   CommandProcessorTest() {
     os_ = new StrictMock<MockOs>();
+    auto& accumulator = written_to_os_;
+    ON_CALL(*os_, Write(_, _, _))
+        .WillByDefault(Invoke(
+            [&accumulator](int /*fd*/, const void* write_buf, size_t buflen) {
+              accumulator.append(static_cast<const char*>(write_buf), buflen);
+              return std::tuple<size_t, Os::Errno>(buflen, 0);
+            }));
     command_processor_ = std::unique_ptr<CommandProcessor>(
         new CommandProcessor(kBufferSizeBytes, std::unique_ptr<Os>(os_)));
   }
@@ -140,6 +147,7 @@ class CommandProcessorTest : public ::testing::Test {
     return command_processor_->ProcessCommand(buf.data(), buf.size(), kFakeFd);
   }
 
+  std::string written_to_os_;  // Must out-live |os_|
   std::unique_ptr<CommandProcessor> command_processor_;
   // We use a raw pointer to access the mock, since ownership passes
   // to |command_processor_|.
@@ -225,16 +233,9 @@ TEST_F(CommandProcessorTest,
   EXPECT_TRUE(command_processor_->ProcessCommand(
       command_buf.data(), command_buf.size(), Os::kInvalidFd));
 
-  std::string written_to_os;
-  EXPECT_CALL(*os_, Write(_, _, _))
-      .Times(AtLeast(1))
-      .WillRepeatedly(Invoke(
-          [&written_to_os](int /*fd*/, const void* write_buf, size_t buflen) {
-            written_to_os.append(static_cast<const char*>(write_buf), buflen);
-            return std::tuple<size_t, Os::Errno>(buflen, 0);
-          }));
+  EXPECT_CALL(*os_, Write(_, _, _)).Times(AtLeast(1));
   EXPECT_TRUE(SendDumpBuffers());
-  EXPECT_THAT(written_to_os, StartsWith("0.000000 1.000001 123456.123456"));
+  EXPECT_THAT(written_to_os_, StartsWith("0.000000 1.000001 123456.123456"));
 }
 
 TEST_F(CommandProcessorTest, ProcessCommandDumpBuffersSucceedsOnEmptyLog) {
@@ -248,16 +249,11 @@ TEST_F(CommandProcessorTest, ProcessCommandDumpBuffersIncludesAllMessages) {
     ASSERT_TRUE(SendAsciiMessage("tag", "message"));
   }
 
-  std::string written_to_os;
-  EXPECT_CALL(*os_, Write(_, _, _))
-      .WillRepeatedly(Invoke(
-          [&written_to_os](int /*fd*/, const void* write_buf, size_t buflen) {
-            written_to_os.append(static_cast<const char*>(write_buf), buflen);
-            return std::tuple<size_t, Os::Errno>(buflen, 0);
-          }));
+  EXPECT_CALL(*os_, Write(_, _, _)).Times(AtLeast(1));
   EXPECT_TRUE(SendDumpBuffers());
-  EXPECT_EQ(kNumMessages, std::count(written_to_os.begin(), written_to_os.end(),
-                                     kLogRecordSeparator));
+  EXPECT_EQ(kNumMessages,
+            std::count(written_to_os_.begin(), written_to_os_.end(),
+                       kLogRecordSeparator));
 }
 
 TEST_F(CommandProcessorTest, ProcessCommandDumpBuffersStopsAfterFirstError) {
@@ -290,20 +286,15 @@ TEST_F(CommandProcessorTest, ProcessCommandDumpBuffersContinuesPastEintr) {
 TEST_F(CommandProcessorTest, ProcessCommandDumpBuffersIsIdempotent) {
   ASSERT_TRUE(SendAsciiMessage("tag", "message"));
 
-  std::string written_to_os;
-  EXPECT_CALL(*os_, Write(_, _, _))
-      .WillRepeatedly(Invoke(
-          [&written_to_os](int /*fd*/, const void* write_buf, size_t buflen) {
-            written_to_os.append(static_cast<const char*>(write_buf), buflen);
-            return std::tuple<size_t, Os::Errno>(buflen, 0);
-          }));
+  EXPECT_CALL(*os_, Write(_, _, _)).Times(AtLeast(1));
   ASSERT_TRUE(SendDumpBuffers());
-  ASSERT_GT(written_to_os.size(), 0U);
-  written_to_os.clear();
+  ASSERT_GT(written_to_os_.size(), 0U);
+  written_to_os_.clear();
+  ASSERT_EQ(0U, written_to_os_.size());
 
-  ASSERT_EQ(0U, written_to_os.size());
+  EXPECT_CALL(*os_, Write(_, _, _)).Times(AtLeast(1));
   EXPECT_TRUE(SendDumpBuffers());
-  EXPECT_GT(written_to_os.size(), 0U);
+  EXPECT_GT(written_to_os_.size(), 0U);
 }
 
 TEST_F(CommandProcessorTest,
@@ -312,14 +303,11 @@ TEST_F(CommandProcessorTest,
   EXPECT_CALL(*os_, Write(_, _, _))
       .WillOnce(Return(std::tuple<size_t, Os::Errno>{-1, EBADF}));
   ASSERT_FALSE(SendDumpBuffers());
+  ASSERT_EQ(0U, written_to_os_.size());
 
-  EXPECT_CALL(*os_, Write(_, _, _))
-      .Times(AtLeast(1))
-      .WillRepeatedly(
-          Invoke([](int /*fd*/, const void* /*write_buf*/, size_t buflen) {
-            return std::tuple<size_t, Os::Errno>(buflen, 0);
-          }));
+  EXPECT_CALL(*os_, Write(_, _, _)).Times(AtLeast(1));
   EXPECT_TRUE(SendDumpBuffers());
+  EXPECT_GT(written_to_os_.size(), 0U);
 }
 
 // Strictly speaking, this is not a unit test. But there's no easy way to get
