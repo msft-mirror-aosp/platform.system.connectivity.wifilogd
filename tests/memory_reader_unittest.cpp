@@ -93,9 +93,9 @@ TEST(MemoryReaderTest, CopyOutOrDieWorksForMultipleObjects) {
     uint64_t a;
     uint64_t b;
   } second_message{0, GetMaxVal(second_message.b)};
-  ByteBuffer<sizeof(first_message) + sizeof(second_message)> buf;
-  buf.AppendOrDie(&first_message, sizeof(first_message));
-  buf.AppendOrDie(&second_message, sizeof(second_message));
+  const auto& buf = ByteBuffer<sizeof(first_message) + sizeof(second_message)>()
+                        .AppendOrDie(&first_message, sizeof(first_message))
+                        .AppendOrDie(&second_message, sizeof(second_message));
 
   MemoryReader memory_reader(buf.data(), buf.size());
   const auto& copy_of_first_message = memory_reader.CopyOutOrDie<M1>();

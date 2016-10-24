@@ -162,10 +162,10 @@ bool CommandProcessor::CopyCommandToLog(const void* command_buffer,
   tstamp_header.since_boot_with_sleep = os_->GetTimestamp(CLOCK_BOOTTIME);
   tstamp_header.since_epoch = os_->GetTimestamp(CLOCK_REALTIME);
 
-  ByteBuffer<sizeof(TimestampHeader) + protocol::kMaxMessageSize> message_buf;
-  message_buf.AppendOrDie(&tstamp_header, sizeof(tstamp_header));
-  message_buf.AppendOrDie(command_buffer, command_len);
-
+  const auto& message_buf =
+      ByteBuffer<sizeof(TimestampHeader) + protocol::kMaxMessageSize>()
+          .AppendOrDie(&tstamp_header, sizeof(tstamp_header))
+          .AppendOrDie(command_buffer, command_len);
   bool did_write = current_log_buffer_.Append(
       message_buf.data(),
       SAFELY_CLAMP(message_buf.size(), uint16_t, 0, GetMaxVal<uint16_t>()));
