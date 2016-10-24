@@ -24,6 +24,7 @@
 #include "android-base/unique_fd.h"
 
 #include "wifilogd/local_utils.h"
+#include "wifilogd/memory_reader.h"
 #include "wifilogd/message_buffer.h"
 #include "wifilogd/os.h"
 
@@ -75,8 +76,22 @@ class CommandProcessor {
   // an unrecoverable error was encountered.
   bool Dump(::android::base::unique_fd dump_fd);
 
+  // Returns a human-friendly string representation of the AsciiMessage
+  // contained at the head of the memory referenced by |memory_reader|.
+  // Validates that |memory_reader| has enough bytes to contain an AsciiMessage
+  // header, and the payload described by that header. Reports any errors in
+  // the returned string.
+  std::string FormatAsciiMessage(MemoryReader memory_reader);
+
   // The MessageBuffer is inlined, since there's not much value to mocking
   // simple data objects. See Testing on the Toilet Episode 173.
+  //
+  // Note that the messages in |current_log_buffer_| have not been validated,
+  // expect to ensure that:
+  // a) each message starts with a TimestampHeader, and
+  // b) each message is large enough for a protocol::Command to follow the
+  //    TimestampHeader,and
+  // c) the protocol::Command::opcode for each message is a supported opcode.
   MessageBuffer current_log_buffer_;
   const std::unique_ptr<Os> os_;
 

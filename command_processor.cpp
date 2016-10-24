@@ -16,6 +16,7 @@
 
 #include <string.h>
 
+#include <algorithm>
 #include <cinttypes>
 #include <string>
 #include <tuple>
@@ -27,6 +28,7 @@
 #include "wifilogd/byte_buffer.h"
 #include "wifilogd/command_processor.h"
 #include "wifilogd/local_utils.h"
+#include "wifilogd/memory_reader.h"
 #include "wifilogd/protocol.h"
 
 namespace android {
@@ -38,7 +40,45 @@ using local_utils::CopyFromBufferOrDie;
 using local_utils::GetMaxVal;
 
 namespace {
+
+constexpr char kUnprintableCharReplacement = '?';
+
+std::string MakeSanitizedString(const uint8_t* buf, size_t buf_len);
+
+std::string GetStringFromMemoryReader(NONNULL MemoryReader* buffer_reader,
+                                      const size_t desired_len) {
+  constexpr char kBufferOverrunError[] = "[buffer-overrun]";
+  constexpr char kZeroLengthError[] = "[empty]";
+  if (!desired_len) {
+    // TODO(b/32098735): Incremement stats counter.
+    return kZeroLengthError;
+  }
+
+  auto effective_len = desired_len;
+  if (buffer_reader->size() < effective_len) {
+    // TODO(b/32098735): Incremement stats counter.
+    effective_len = buffer_reader->size();
+  }
+
+  auto out = MakeSanitizedString(buffer_reader->GetBytesOrDie(effective_len),
+                                 effective_len);
+  if (effective_len < desired_len) {
+    out += kBufferOverrunError;
+  }
+
+  return out;
+}
+
+std::string MakeSanitizedString(const uint8_t* buf, size_t buf_len) {
+  std::string out(buf_len, '\0');
+  std::replace_copy_if(buf, buf + buf_len, &out.front(),
+                       [](auto c) { return !local_utils::IsAsciiPrintable(c); },
+                       kUnprintableCharReplacement);
+  return out;
+}
+
 uint32_t NsecToUsec(uint32_t nsec) { return nsec / 1000; }
+
 }  // namespace
 
 CommandProcessor::CommandProcessor(size_t buffer_size_bytes)
@@ -135,26 +175,34 @@ bool CommandProcessor::CopyCommandToLog(const void* command_buffer,
 }
 
 bool CommandProcessor::Dump(unique_fd dump_fd) {
-  const uint8_t* buf = nullptr;
-  size_t buflen = 0;
-  static_assert(
-      GetMaxVal(buflen) - sizeof(TimestampHeader) - sizeof(protocol::Command) >=
-          GetMaxVal<decltype(protocol::Command::payload_len)>(),
-      "buflen cannot accommodate some messages");
-
   MessageBuffer::ScopedRewinder rewinder(&current_log_buffer_);
-  std::tie(buf, buflen) = current_log_buffer_.ConsumeNextMessage();
-  while (buf) {
-    const auto& tstamp_header =
-        CopyFromBufferOrDie<TimestampHeader>(buf, buflen);
-    buf += sizeof(tstamp_header);
-    buflen -= sizeof(tstamp_header);
+  while (auto buffer_reader =
+             MemoryReader(current_log_buffer_.ConsumeNextMessage())) {
+    const auto& tstamp_header = buffer_reader.CopyOutOrDie<TimestampHeader>();
+    const auto& command_header =
+        buffer_reader.CopyOutOrDie<protocol::Command>();
 
-    const std::string timestamp_string(tstamp_header.ToString() + '\n');
+    // TOOO(b/32256098): validate |buffer_reader.size()| against payload_len,
+    // and use a smaller size if necessary. Update a stats counter if
+    // payload_len and
+    // buflen do not match.
+
+    std::string output_string = tstamp_header.ToString();
+    switch (command_header.opcode) {
+      using protocol::Opcode;
+      case Opcode::kWriteAsciiMessage:
+        output_string += ' ' + FormatAsciiMessage(buffer_reader);
+        break;
+      case Opcode::kDumpBuffers:
+        LOG(FATAL) << "Unexpected DumpBuffers command in log";
+        break;
+    }
+    output_string += '\n';
+
     size_t n_written;
     Os::Errno err;
     std::tie(n_written, err) =
-        os_->Write(dump_fd, timestamp_string.data(), timestamp_string.size());
+        os_->Write(dump_fd, output_string.data(), output_string.size());
     if (err == EINTR) {
       // The next write will probably succeed. We dont't retry the current
       // message, however, because we want to guarantee forward progress.
@@ -166,11 +214,25 @@ bool CommandProcessor::Dump(unique_fd dump_fd) {
       LOG(ERROR) << "Terminating log dump, due to " << strerror(err);
       return false;
     }
-
-    std::tie(buf, buflen) = current_log_buffer_.ConsumeNextMessage();
   }
 
   return true;
+}
+
+std::string CommandProcessor::FormatAsciiMessage(MemoryReader buffer_reader) {
+  constexpr char kShortHeaderError[] = "[truncated-header]";
+  if (buffer_reader.size() < sizeof(protocol::AsciiMessage)) {
+    // TODO(b/32098735): Incremement stats counter.
+    return kShortHeaderError;
+  }
+
+  const auto& ascii_message_header =
+      buffer_reader.CopyOutOrDie<protocol::AsciiMessage>();
+  const std::string& formatted_tag =
+      GetStringFromMemoryReader(&buffer_reader, ascii_message_header.tag_len);
+  const std::string& formatted_msg =
+      GetStringFromMemoryReader(&buffer_reader, ascii_message_header.data_len);
+  return formatted_tag + ' ' + formatted_msg;
 }
 
 }  // namespace wifilogd

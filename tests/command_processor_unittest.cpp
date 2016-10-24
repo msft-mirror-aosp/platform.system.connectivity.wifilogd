@@ -18,6 +18,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <tuple>
@@ -42,6 +43,7 @@ using ::android::base::unique_fd;
 using ::testing::_;
 using ::testing::AnyNumber;
 using ::testing::AtLeast;
+using ::testing::EndsWith;
 using ::testing::HasSubstr;
 using ::testing::Invoke;
 using ::testing::Return;
@@ -118,7 +120,7 @@ class CommandProcessorTest : public ::testing::Test {
 
   bool SendAsciiMessageWithAdjustments(
       const std::string& tag, const std::string& message,
-      ssize_t command_payload_len_adjustment,
+      ssize_t transport_len_adjustment, ssize_t command_payload_len_adjustment,
       ssize_t ascii_message_tag_len_adjustment,
       ssize_t ascii_message_data_len_adjustment) {
     const CommandBuffer& command_buffer(BuildAsciiMessageCommandWithAdjustments(
@@ -128,11 +130,12 @@ class CommandProcessorTest : public ::testing::Test {
     EXPECT_CALL(*os_, GetTimestamp(CLOCK_BOOTTIME));
     EXPECT_CALL(*os_, GetTimestamp(CLOCK_REALTIME));
     return command_processor_->ProcessCommand(
-        command_buffer.data(), command_buffer.size(), Os::kInvalidFd);
+        command_buffer.data(), command_buffer.size() + transport_len_adjustment,
+        Os::kInvalidFd);
   }
 
   bool SendAsciiMessage(const std::string& tag, const std::string& message) {
-    return SendAsciiMessageWithAdjustments(tag, message, 0, 0, 0);
+    return SendAsciiMessageWithAdjustments(tag, message, 0, 0, 0, 0);
   }
 
   bool SendDumpBuffers() {
@@ -189,20 +192,20 @@ TEST_F(CommandProcessorTest,
 
 TEST_F(CommandProcessorTest,
        ProcessCommandOnAsciiMessageWithBadCommandLengthSucceeds) {
-  EXPECT_TRUE(SendAsciiMessageWithAdjustments("tag", "message", 1, 0, 0));
-  EXPECT_TRUE(SendAsciiMessageWithAdjustments("tag", "message", -1, 0, 0));
+  EXPECT_TRUE(SendAsciiMessageWithAdjustments("tag", "message", 0, 1, 0, 0));
+  EXPECT_TRUE(SendAsciiMessageWithAdjustments("tag", "message", 0, -1, 0, 0));
 }
 
 TEST_F(CommandProcessorTest,
        ProcessCommandOnAsciiMessageWithBadTagLengthSucceeds) {
-  EXPECT_TRUE(SendAsciiMessageWithAdjustments("tag", "message", 0, 1, 0));
-  EXPECT_TRUE(SendAsciiMessageWithAdjustments("tag", "message", 0, -1, 0));
+  EXPECT_TRUE(SendAsciiMessageWithAdjustments("tag", "message", 0, 0, 1, 0));
+  EXPECT_TRUE(SendAsciiMessageWithAdjustments("tag", "message", 0, 0, -1, 0));
 }
 
 TEST_F(CommandProcessorTest,
        ProcessCommandOnAsciiMessageWithBadMessageLengthSucceeds) {
-  EXPECT_TRUE(SendAsciiMessageWithAdjustments("tag", "message", 0, 0, 1));
-  EXPECT_TRUE(SendAsciiMessageWithAdjustments("tag", "message", 0, 0, -1));
+  EXPECT_TRUE(SendAsciiMessageWithAdjustments("tag", "message", 0, 0, 0, 1));
+  EXPECT_TRUE(SendAsciiMessageWithAdjustments("tag", "message", 0, 0, 0, -1));
 }
 
 TEST_F(CommandProcessorTest, ProcessCommandOnOverlyLargeAsciiMessageSucceeds) {
@@ -254,6 +257,115 @@ TEST_F(CommandProcessorTest, ProcessCommandDumpBuffersIncludesAllMessages) {
   EXPECT_EQ(kNumMessages,
             std::count(written_to_os_.begin(), written_to_os_.end(),
                        kLogRecordSeparator));
+}
+
+TEST_F(CommandProcessorTest,
+       ProcessCommandDumpBuffersAsciiMessageIncludesTagAndMessage) {
+  ASSERT_TRUE(SendAsciiMessage("tag", "message"));
+  EXPECT_CALL(*os_, Write(_, _, _)).Times(AtLeast(1));
+  ASSERT_TRUE(SendDumpBuffers());
+  EXPECT_THAT(written_to_os_, EndsWith("tag message\n"));
+}
+
+TEST_F(CommandProcessorTest,
+       ProcessCommandDumpBuffersAsciiMessageHandlesEmptyTag) {
+  ASSERT_TRUE(SendAsciiMessage("", "message"));
+  EXPECT_CALL(*os_, Write(_, _, _)).Times(AtLeast(1));
+  ASSERT_TRUE(SendDumpBuffers());
+  EXPECT_THAT(written_to_os_, EndsWith("[empty] message\n"));
+}
+
+TEST_F(CommandProcessorTest,
+       ProcessCommandDumpBuffersAsciiMessageHandlesEmptyMessage) {
+  ASSERT_TRUE(SendAsciiMessage("tag", ""));
+  EXPECT_CALL(*os_, Write(_, _, _)).Times(AtLeast(1));
+  ASSERT_TRUE(SendDumpBuffers());
+  EXPECT_THAT(written_to_os_, EndsWith("tag [empty]\n"));
+}
+
+TEST_F(CommandProcessorTest,
+       ProcessCommandDumpBuffersAsciiMessageHandlesEmptyTagAndEmptyMessage) {
+  ASSERT_TRUE(SendAsciiMessage("", ""));
+  EXPECT_CALL(*os_, Write(_, _, _)).Times(AtLeast(1));
+  ASSERT_TRUE(SendDumpBuffers());
+  EXPECT_THAT(written_to_os_, EndsWith("[empty] [empty]\n"));
+}
+
+TEST_F(CommandProcessorTest,
+       ProcessCommandDumpBuffersAsciiMessageSanitizesUnprintableChars) {
+  ASSERT_TRUE(SendAsciiMessage("\xfftag\xff", "\xffmessage\xff"));
+  EXPECT_CALL(*os_, Write(_, _, _)).Times(AtLeast(1));
+  ASSERT_TRUE(SendDumpBuffers());
+  EXPECT_THAT(written_to_os_, EndsWith("?tag? ?message?\n"));
+}
+
+TEST_F(
+    CommandProcessorTest,
+    ProcessCommandDumpBuffersAsciiMessageHandlesMessageTooShortForAsciiMessage) {  // NOLINT(whitespace/line_length)
+  ASSERT_TRUE(SendAsciiMessageWithAdjustments("", "", -1, 0, 0, 0));
+  EXPECT_CALL(*os_, Write(_, _, _)).Times(AtLeast(1));
+  ASSERT_TRUE(SendDumpBuffers());
+  EXPECT_THAT(written_to_os_, EndsWith("[truncated-header]\n"));
+}
+
+TEST_F(CommandProcessorTest,
+       ProcessCommandDumpBuffersAsciiMessageHandlesMessageTooShortForTagStart) {
+  constexpr char kTag[] = "tag";
+  constexpr char kMessage[] = "message";
+  ASSERT_TRUE(SendAsciiMessageWithAdjustments(
+      kTag, kMessage, -(std::strlen(kTag) + std::strlen(kMessage)), 0, 0, 0));
+  EXPECT_CALL(*os_, Write(_, _, _)).Times(AtLeast(1));
+  ASSERT_TRUE(SendDumpBuffers());
+  EXPECT_THAT(written_to_os_, EndsWith("[buffer-overrun] [buffer-overrun]\n"));
+}
+
+TEST_F(CommandProcessorTest,
+       ProcessCommandDumpBuffersAsciiMessageHandlesMessageTooShortForTagEnd) {
+  constexpr char kTag[] = "tag";
+  constexpr char kMessage[] = "message";
+  ASSERT_TRUE(SendAsciiMessageWithAdjustments(
+      kTag, kMessage, -(1 + std::strlen(kMessage)), 0, 0, 0));
+  EXPECT_CALL(*os_, Write(_, _, _)).Times(AtLeast(1));
+  ASSERT_TRUE(SendDumpBuffers());
+  EXPECT_THAT(written_to_os_,
+              EndsWith("ta[buffer-overrun] [buffer-overrun]\n"));
+}
+
+TEST_F(
+    CommandProcessorTest,
+    ProcessCommandDumpBuffersAsciiMessageHandlesMessageTooShortForLogMessageStart) {  // NOLINT(whitespace/line_length)
+  constexpr char kTag[] = "tag";
+  constexpr char kMessage[] = "message";
+  ASSERT_TRUE(SendAsciiMessageWithAdjustments(kTag, kMessage,
+                                              -std::strlen(kMessage), 0, 0, 0));
+  EXPECT_CALL(*os_, Write(_, _, _)).Times(AtLeast(1));
+  ASSERT_TRUE(SendDumpBuffers());
+  EXPECT_THAT(written_to_os_, EndsWith("tag [buffer-overrun]\n"));
+}
+
+TEST_F(
+    CommandProcessorTest,
+    ProcessCommandDumpBuffersAsciiMessageHandlesMessageTooShortForLogMessageEnd) {  // NOLINT(whitespace/line_length)
+  ASSERT_TRUE(SendAsciiMessageWithAdjustments("tag", "message", -1, 0, 0, 0));
+  EXPECT_CALL(*os_, Write(_, _, _)).Times(AtLeast(1));
+  ASSERT_TRUE(SendDumpBuffers());
+  EXPECT_THAT(written_to_os_, EndsWith("tag messag[buffer-overrun]\n"));
+}
+
+TEST_F(CommandProcessorTest,
+       ProcessCommandDumpBuffersAsciiMessageHandlesMessageTooLongForTag) {
+  ASSERT_TRUE(SendAsciiMessageWithAdjustments("tag", "", 100, 0, 0, 0));
+  EXPECT_CALL(*os_, Write(_, _, _)).Times(AtLeast(1));
+  ASSERT_TRUE(SendDumpBuffers());
+  EXPECT_THAT(written_to_os_, EndsWith("tag [empty]\n"));
+}
+
+TEST_F(CommandProcessorTest,
+       ProcessCommandDumpBuffersAsciiMessageHandlesMessageTooLongForMessage) {
+  ASSERT_TRUE(SendAsciiMessageWithAdjustments("tag", "message", 100, 0, 0, 0));
+  EXPECT_CALL(*os_, Write(_, _, _)).Times(AtLeast(1));
+  ASSERT_TRUE(SendDumpBuffers());
+  EXPECT_THAT(written_to_os_, EndsWith("tag message\n"));
 }
 
 TEST_F(CommandProcessorTest, ProcessCommandDumpBuffersStopsAfterFirstError) {
