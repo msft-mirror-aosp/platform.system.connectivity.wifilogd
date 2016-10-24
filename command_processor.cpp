@@ -112,6 +112,11 @@ bool CommandProcessor::ProcessCommand(const void* input_buffer,
     case Opcode::kDumpBuffers:
       return Dump(std::move(wrapped_fd));
   }
+
+  LOG(DEBUG) << "Received unexpected opcode "
+             << local_utils::CastEnumToInteger(command_header.opcode);
+  // TODO(b/32098735): Incremement stats counter.
+  return false;
 }
 
 // Private methods below.
