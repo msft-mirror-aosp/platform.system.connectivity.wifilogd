@@ -58,6 +58,25 @@ Os::Timestamp Os::GetTimestamp(clockid_t clock_id) const {
   return now_timestamp;
 }
 
+std::tuple<size_t, Os::Errno> Os::ReceiveDatagram(int fd, void* buf,
+                                                  size_t buflen) {
+  // recv() takes a size_t, but returns an ssize_t. That means that the largest
+  // successful read that recv() can report is the maximal ssize_t. Passing a
+  // larger |buflen| risks mistakenly reporting a truncated read.
+  CHECK(buflen <= GetMaxVal<ssize_t>());
+
+  const ssize_t res = raw_os_->Recv(fd, buf, buflen, MSG_TRUNC);
+  if (res < 0) {
+    return {0, errno};
+  }
+
+  // Due to the MSG_TRUNC flag, |res| may reasonably be larger than
+  // |buflen|. In such cases, |res| indicates the full size of the datagram,
+  // before being truncated to fit our buffer. Hence, we omit the
+  // buffer-overflow CHECK that exists in Write().
+  return {res, 0};
+}
+
 std::tuple<size_t, Os::Errno> Os::Write(int fd, const void* buf,
                                         size_t buflen) {
   // write() takes a size_t, but returns an ssize_t. That means that the

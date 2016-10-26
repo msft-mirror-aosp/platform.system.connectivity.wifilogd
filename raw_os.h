@@ -17,6 +17,8 @@
 #ifndef RAW_OS_H_
 #define RAW_OS_H_
 
+#include <sys/socket.h>
+#include <sys/types.h>
 #include <time.h>
 
 #include "android-base/macros.h"
@@ -35,6 +37,9 @@ class RawOs {
   // See clock_gettime().
   virtual int ClockGettime(clockid_t clock_id,
                            NONNULL struct timespec* tspec) const;
+
+  // See recv().
+  virtual ssize_t Recv(int sockfd, void* buf, size_t buflen, int flags);
 
   // See write().
   virtual ssize_t Write(int fd, const void* buf, size_t buflen);

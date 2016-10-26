@@ -33,6 +33,8 @@ class MockOs : public Os {
   ~MockOs() override;
 
   MOCK_CONST_METHOD1(GetTimestamp, Timestamp(clockid_t clock_id));
+  MOCK_METHOD3(ReceiveDatagram,
+               std::tuple<size_t, Errno>(int fd, void* buf, size_t buflen));
   MOCK_METHOD3(Write, std::tuple<size_t, Os::Errno>(int fd, const void* buf,
                                                     size_t buflen));
 

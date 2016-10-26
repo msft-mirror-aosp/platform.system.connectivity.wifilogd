@@ -65,6 +65,66 @@ TEST_F(OsTest, GetTimestampSucceeds) {
   EXPECT_EQ(kFakeNsecs, received.nsecs);
 }
 
+TEST_F(OsTest, ReceiveDatagramReturnsCorrectValueForMaxSizedDatagram) {
+  constexpr int kFakeFd = 100;
+  std::array<uint8_t, 8192> buffer{};
+  EXPECT_CALL(*raw_os_, Recv(kFakeFd, buffer.data(), buffer.size(), MSG_TRUNC))
+      .WillOnce(Return(buffer.size()));
+
+  constexpr std::tuple<size_t, Os::Errno> kExpectedResult{buffer.size(), 0};
+  EXPECT_EQ(kExpectedResult,
+            os_->ReceiveDatagram(kFakeFd, buffer.data(), buffer.size()));
+}
+
+TEST_F(OsTest, ReceieveDatagramReturnsCorrectValueForRegularSizedDatagram) {
+  constexpr int kFakeFd = 100;
+  constexpr auto kReadBufferSize = 8192;
+  constexpr auto kDatagramSize = kReadBufferSize / 2;
+  std::array<uint8_t, kReadBufferSize> buffer{};
+  EXPECT_CALL(*raw_os_, Recv(kFakeFd, buffer.data(), buffer.size(), MSG_TRUNC))
+      .WillOnce(Return(kDatagramSize));
+
+  constexpr std::tuple<size_t, Os::Errno> kExpectedResult{kDatagramSize, 0};
+  EXPECT_EQ(kExpectedResult,
+            os_->ReceiveDatagram(kFakeFd, buffer.data(), buffer.size()));
+}
+
+TEST_F(OsTest, ReceieveDatagramReturnsCorrectValueForOversizedDatagram) {
+  constexpr int kFakeFd = 100;
+  constexpr auto kReadBufferSize = 8192;
+  constexpr auto kDatagramSize = kReadBufferSize * 2;
+  std::array<uint8_t, kReadBufferSize> buffer{};
+  EXPECT_CALL(*raw_os_, Recv(kFakeFd, buffer.data(), buffer.size(), MSG_TRUNC))
+      .WillOnce(Return(kDatagramSize));
+
+  constexpr std::tuple<size_t, Os::Errno> kExpectedResult{kDatagramSize, 0};
+  EXPECT_EQ(kExpectedResult,
+            os_->ReceiveDatagram(kFakeFd, buffer.data(), buffer.size()));
+}
+
+TEST_F(OsTest, ReceieveDatagramReturnsCorrectValueForZeroByteDatagram) {
+  constexpr int kFakeFd = 100;
+  std::array<uint8_t, 8192> buffer{};
+  EXPECT_CALL(*raw_os_, Recv(kFakeFd, buffer.data(), buffer.size(), MSG_TRUNC))
+      .WillOnce(Return(0));
+
+  constexpr std::tuple<size_t, Os::Errno> kExpectedResult{0, 0};
+  EXPECT_EQ(kExpectedResult,
+            os_->ReceiveDatagram(kFakeFd, buffer.data(), buffer.size()));
+}
+
+TEST_F(OsTest, ReceieveDatagramReturnsCorrectValueOnFailure) {
+  constexpr int kFakeFd = 100;
+  constexpr Os::Errno kError = EBADF;
+  std::array<uint8_t, 8192> buffer{};
+  EXPECT_CALL(*raw_os_, Recv(kFakeFd, buffer.data(), buffer.size(), MSG_TRUNC))
+      .WillOnce(SetErrnoAndReturn(kError, -1));
+
+  constexpr std::tuple<size_t, Os::Errno> kExpectedResult{0, kError};
+  EXPECT_EQ(kExpectedResult,
+            os_->ReceiveDatagram(kFakeFd, buffer.data(), buffer.size()));
+}
+
 TEST_F(OsTest, WriteReturnsCorrectValueForSuccessfulWrite) {
   constexpr int kFakeFd = 100;
   constexpr std::array<uint8_t, 8192> buffer{};
@@ -86,11 +146,31 @@ TEST_F(OsTest, WriteReturnsCorrectValueForTruncatedWrite) {
   EXPECT_EQ(kExpectedResult, os_->Write(kFakeFd, buffer.data(), buffer.size()));
 }
 
+TEST_F(OsTest, WriteReturnsCorrectValueForSuccessfulZeroByteWrite) {
+  constexpr int kFakeFd = 100;
+  constexpr std::array<uint8_t, 0> buffer{};
+  EXPECT_CALL(*raw_os_, Write(kFakeFd, buffer.data(), 0)).WillOnce(Return(0));
+
+  constexpr std::tuple<size_t, Os::Errno> kExpectedResult{0, 0};
+  EXPECT_EQ(kExpectedResult, os_->Write(kFakeFd, buffer.data(), buffer.size()));
+}
+
 TEST_F(OsTest, WriteReturnsCorrectValueForFailedWrite) {
   constexpr int kFakeFd = 100;
-  constexpr Os::Errno kError = EBADFD;
+  constexpr Os::Errno kError = EBADF;
   constexpr std::array<uint8_t, 8192> buffer{};
   EXPECT_CALL(*raw_os_, Write(kFakeFd, buffer.data(), buffer.size()))
+      .WillOnce(SetErrnoAndReturn(kError, -1));
+
+  constexpr std::tuple<size_t, Os::Errno> kExpectedResult{0, kError};
+  EXPECT_EQ(kExpectedResult, os_->Write(kFakeFd, buffer.data(), buffer.size()));
+}
+
+TEST_F(OsTest, WriteReturnsCorrectValueForFailedZeroByteWrite) {
+  constexpr int kFakeFd = 100;
+  constexpr Os::Errno kError = EBADF;
+  constexpr std::array<uint8_t, 0> buffer{};
+  EXPECT_CALL(*raw_os_, Write(kFakeFd, buffer.data(), 0))
       .WillOnce(SetErrnoAndReturn(kError, -1));
 
   constexpr std::tuple<size_t, Os::Errno> kExpectedResult{0, kError};
@@ -116,11 +196,17 @@ TEST_F(OsDeathTest, GetTimestampRawOsErrorCausesDeath) {
   EXPECT_DEATH(os_->GetTimestamp(CLOCK_REALTIME), "Unexpected error");
 }
 
+TEST_F(OsDeathTest, ReceiveDatagramWithOverlyLargeBufferCausesDeath) {
+  constexpr int kFakeFd = 100;
+  std::array<uint8_t, 8192> buffer{};
+  EXPECT_DEATH(
+      os_->ReceiveDatagram(kFakeFd, buffer.data(), GetMaxVal<size_t>()),
+      "Check failed");
+}
+
 TEST_F(OsDeathTest, WriteWithOverlyLargeBufferCausesDeath) {
   constexpr int kFakeFd = 100;
   constexpr std::array<uint8_t, 8192> buffer{};
-  ON_CALL(*raw_os_, Write(kFakeFd, buffer.data(), GetMaxVal<size_t>()))
-      .WillByDefault(Return(GetMaxVal<ssize_t>()));
   EXPECT_DEATH(os_->Write(kFakeFd, buffer.data(), GetMaxVal<size_t>()),
                "Check failed");
 }
