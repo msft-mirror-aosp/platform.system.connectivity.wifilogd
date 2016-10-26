@@ -21,6 +21,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <tuple>
 #include <utility>
 
@@ -57,6 +58,12 @@ class Os {
   explicit Os(std::unique_ptr<RawOs> raw_os);
 
   virtual ~Os();
+
+  // Returns the Android control socket with name |socket_name|. If no such
+  // socket exists, or the init daemon has not provided this process with
+  // access to said socket, returns {kInvalidFd, errno}.
+  virtual std::tuple<int, Errno> GetControlSocket(
+      const std::string& socket_name);
 
   // Returns the current time, as reported by the clock with |clock_id|.
   virtual Timestamp GetTimestamp(clockid_t clock_id) const;

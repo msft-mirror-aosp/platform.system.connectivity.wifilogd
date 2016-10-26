@@ -39,6 +39,7 @@ LOCAL_SRC_FILES := \
     raw_os.cpp
 LOCAL_SHARED_LIBRARIES := \
     libbase \
+    libcutils \
     liblog
 include $(BUILD_STATIC_LIBRARY)
 
@@ -66,5 +67,6 @@ LOCAL_STATIC_LIBRARIES := \
     libwifilogd
 LOCAL_SHARED_LIBRARIES := \
     libbase \
+    libcutils \
     liblog
 include $(BUILD_NATIVE_TEST)
