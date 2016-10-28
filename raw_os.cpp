@@ -39,6 +39,10 @@ int RawOs::GetControlSocket(const char* socket_name) {
   return android_get_control_socket(socket_name);
 }
 
+int RawOs::Nanosleep(const struct timespec* req, struct timespec* rem) {
+  return nanosleep(req, rem);
+}
+
 ssize_t RawOs::Recv(int sockfd, void* buf, size_t buflen, int flags) {
   return recv(sockfd, buf, buflen, flags);
 }
