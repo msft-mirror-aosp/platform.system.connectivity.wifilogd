@@ -98,8 +98,8 @@ class MessageBuffer {
   // includes headers.
   size_t GetReadableSize() const { return write_pos_ - read_pos_; }
 
-  std::unique_ptr<uint8_t[]> data_;
-  size_t capacity_;
+  const std::unique_ptr<uint8_t[]> data_;
+  const size_t capacity_;
   size_t read_pos_;
   size_t write_pos_;
 
