@@ -98,7 +98,7 @@ TEST_F(OsTest, WriteReturnsCorrectValueForFailedWrite) {
 }
 
 // Per
-// github.com/google/googletest/blob/master/googletest/docs/AdvancedGuide.md#death-tests),
+// github.com/google/googletest/blob/master/googletest/docs/AdvancedGuide.md#death-tests,
 // death tests should be specially named.
 using OsDeathTest = OsTest;
 
