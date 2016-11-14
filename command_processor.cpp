@@ -41,6 +41,46 @@ using local_utils::GetMaxVal;
 
 namespace {
 
+uint32_t NsecToUsec(uint32_t nsec);
+
+class TimestampHeader {
+ public:
+  TimestampHeader& set_since_boot_awake_only(Os::Timestamp new_value) {
+    since_boot_awake_only = new_value;
+    return *this;
+  }
+
+  TimestampHeader& set_since_boot_with_sleep(Os::Timestamp new_value) {
+    since_boot_with_sleep = new_value;
+    return *this;
+  }
+
+  TimestampHeader& set_since_epoch(Os::Timestamp new_value) {
+    since_epoch = new_value;
+    return *this;
+  }
+
+  // Returns a string with a formatted representation of the timestamps
+  // contained within this header.
+  std::string ToString() const {
+    const auto& awake_time = since_boot_awake_only;
+    const auto& up_time = since_boot_with_sleep;
+    const auto& wall_time = since_epoch;
+    return base::StringPrintf("%" PRIu32 ".%06" PRIu32
+                              " "
+                              "%" PRIu32 ".%06" PRIu32
+                              " "
+                              "%" PRIu32 ".%06" PRIu32,
+                              awake_time.secs, NsecToUsec(awake_time.nsecs),
+                              up_time.secs, NsecToUsec(up_time.nsecs),
+                              wall_time.secs, NsecToUsec(wall_time.nsecs));
+  }
+
+  Os::Timestamp since_boot_awake_only;
+  Os::Timestamp since_boot_with_sleep;
+  Os::Timestamp since_epoch;  // non-monotonic
+};
+
 constexpr char kUnprintableCharReplacement = '?';
 
 std::string MakeSanitizedString(const uint8_t* buf, size_t buf_len);
@@ -121,20 +161,6 @@ bool CommandProcessor::ProcessCommand(const void* input_buffer,
 
 // Private methods below.
 
-std::string CommandProcessor::TimestampHeader::ToString() const {
-  const auto& awake_time = since_boot_awake_only;
-  const auto& up_time = since_boot_with_sleep;
-  const auto& wall_time = since_epoch;
-  return base::StringPrintf("%" PRIu32 ".%06" PRIu32
-                            " "
-                            "%" PRIu32 ".%06" PRIu32
-                            " "
-                            "%" PRIu32 ".%06" PRIu32,
-                            awake_time.secs, NsecToUsec(awake_time.nsecs),
-                            up_time.secs, NsecToUsec(up_time.nsecs),
-                            wall_time.secs, NsecToUsec(wall_time.nsecs));
-}
-
 bool CommandProcessor::CopyCommandToLog(const void* command_buffer,
                                         size_t command_len_in) {
   const uint16_t command_len =
@@ -157,11 +183,11 @@ bool CommandProcessor::CopyCommandToLog(const void* command_buffer,
   }
   CHECK(current_log_buffer_.CanFitNow(total_size));
 
-  TimestampHeader tstamp_header;
-  tstamp_header.since_boot_awake_only = os_->GetTimestamp(CLOCK_MONOTONIC);
-  tstamp_header.since_boot_with_sleep = os_->GetTimestamp(CLOCK_BOOTTIME);
-  tstamp_header.since_epoch = os_->GetTimestamp(CLOCK_REALTIME);
-
+  const auto& tstamp_header =
+      TimestampHeader()
+          .set_since_boot_awake_only(os_->GetTimestamp(CLOCK_MONOTONIC))
+          .set_since_boot_with_sleep(os_->GetTimestamp(CLOCK_BOOTTIME))
+          .set_since_epoch(os_->GetTimestamp(CLOCK_REALTIME));
   const auto& message_buf =
       ByteBuffer<sizeof(TimestampHeader) + protocol::kMaxMessageSize>()
           .AppendOrDie(&tstamp_header, sizeof(tstamp_header))
