@@ -41,6 +41,10 @@ class RawOs {
   // See android_get_control_socket().
   virtual int GetControlSocket(const char* socket_name);
 
+  // See nanosleep().
+  virtual int Nanosleep(NONNULL const struct timespec* req,
+                        struct timespec* rem);
+
   // See recv().
   virtual ssize_t Recv(int sockfd, void* buf, size_t buflen, int flags);
 

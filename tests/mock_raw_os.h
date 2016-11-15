@@ -33,6 +33,8 @@ class MockRawOs : public RawOs {
   MOCK_CONST_METHOD2(ClockGettime,
                      int(clockid_t clock_id, struct timespec* tspec));
   MOCK_METHOD1(GetControlSocket, int(const char* socket_name));
+  MOCK_METHOD2(Nanosleep,
+               int(const struct timespec* req, struct timespec* rem));
   MOCK_METHOD4(Recv, ssize_t(int sockfd, void* buf, size_t buflen, int flags));
   MOCK_METHOD3(Write, ssize_t(int fd, const void* buf, size_t buflen));
 

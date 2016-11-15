@@ -49,6 +49,7 @@ class Os {
   };
 
   static constexpr int kInvalidFd = -1;
+  static constexpr auto kMaxNanos = 999'999'999;
 
   // Constructs an Os instance.
   Os();
@@ -67,6 +68,10 @@ class Os {
 
   // Returns the current time, as reported by the clock with |clock_id|.
   virtual Timestamp GetTimestamp(clockid_t clock_id) const;
+
+  // Suspends execution of this process, for |sleep_time_nsec|. The passed
+  // value must not exceed kMaxNanos.
+  virtual void Nanosleep(uint32_t sleep_time_nsec);
 
   // Receives a datagram of up to |buflen| from |fd|, writing the data to |buf|.
   // Returns the size of the datagram, and the result of the operation (0 for
