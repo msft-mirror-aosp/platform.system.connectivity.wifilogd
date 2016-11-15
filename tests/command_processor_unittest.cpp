@@ -84,18 +84,21 @@ class CommandProcessorTest : public ::testing::Test {
       ssize_t command_payload_len_adjustment,
       ssize_t ascii_message_tag_len_adjustment,
       ssize_t ascii_message_data_len_adjustment) {
-    protocol::AsciiMessage ascii_message_header;
-    constexpr auto kMaxTagLength = GetMaxVal(ascii_message_header.tag_len);
-    constexpr auto kMaxDataLength = GetMaxVal(ascii_message_header.data_len);
-    EXPECT_TRUE(tag.length() <= kMaxTagLength);
-    EXPECT_TRUE(message.length() <= kMaxDataLength);
-    ascii_message_header.tag_len =
-        SAFELY_CLAMP(tag.length() + ascii_message_tag_len_adjustment, uint8_t,
-                     0, kMaxTagLength);
-    ascii_message_header.data_len =
-        SAFELY_CLAMP(message.length() + ascii_message_data_len_adjustment,
-                     uint16_t, 0, kMaxDataLength);
-    ascii_message_header.severity = protocol::MessageSeverity::kError;
+    const size_t adjusted_tag_len =
+        tag.length() + ascii_message_tag_len_adjustment;
+    const size_t adjusted_data_len =
+        message.length() + ascii_message_data_len_adjustment;
+    const auto& ascii_message_header =
+        protocol::AsciiMessage()
+            .set_tag_len(SAFELY_CLAMP(
+                adjusted_tag_len, uint8_t, 0,
+                GetMaxVal<decltype(protocol::AsciiMessage::tag_len)>()))
+            .set_data_len(SAFELY_CLAMP(
+                adjusted_data_len, uint16_t, 0,
+                GetMaxVal<decltype(protocol::AsciiMessage::data_len)>()))
+            .set_severity(protocol::MessageSeverity::kError);
+    EXPECT_EQ(adjusted_tag_len, ascii_message_header.tag_len);
+    EXPECT_EQ(adjusted_data_len, ascii_message_header.data_len);
 
     const size_t payload_len = sizeof(ascii_message_header) + tag.length() +
                                message.length() +
