@@ -19,23 +19,6 @@ wifilogd_gtest_cpp_flags := -Wno-undef -Wno-missing-noreturn \
     -Wno-shift-sign-overflow -Wno-used-but-marked-unused -Wno-deprecated \
     -Wno-weak-vtables -Wno-sign-conversion -Wno-global-constructors \
     -Wno-covered-switch-default
-wifilogd_src_files := \
-    command_processor.cpp \
-    memory_reader.cpp \
-    message_buffer.cpp \
-    os.cpp \
-    raw_os.cpp
-wifilogd_test_src_files := \
-    tests/byte_buffer_unittest.cpp \
-    tests/command_processor_unittest.cpp \
-    tests/local_utils_unittest.cpp \
-    tests/main.cpp \
-    tests/memory_reader_unittest.cpp \
-    tests/message_buffer_unittest.cpp \
-    tests/mock_os.cpp \
-    tests/mock_raw_os.cpp \
-    tests/os_unittest.cpp \
-    tests/protocol_unittest.cpp
 
 wifilogd_parent_dir := $(LOCAL_PATH)/../
 wifilogd_includes := \
@@ -48,7 +31,12 @@ include $(CLEAR_VARS)
 LOCAL_MODULE := libwifilogd
 LOCAL_CPPFLAGS := $(wifilogd_cpp_flags)
 LOCAL_C_INCLUDES := $(wifilogd_includes)
-LOCAL_SRC_FILES := $(wifilogd_src_files)
+LOCAL_SRC_FILES := \
+    command_processor.cpp \
+    memory_reader.cpp \
+    message_buffer.cpp \
+    os.cpp \
+    raw_os.cpp
 LOCAL_SHARED_LIBRARIES := \
     libbase \
     liblog
@@ -61,7 +49,17 @@ include $(CLEAR_VARS)
 LOCAL_MODULE := wifilogd_unit_test
 LOCAL_CPPFLAGS := $(wifilogd_cpp_flags) $(wifilogd_gtest_cpp_flags)
 LOCAL_C_INCLUDES := $(wifilogd_includes)
-LOCAL_SRC_FILES := $(wifilogd_test_src_files)
+LOCAL_SRC_FILES := \
+    tests/byte_buffer_unittest.cpp \
+    tests/command_processor_unittest.cpp \
+    tests/local_utils_unittest.cpp \
+    tests/main.cpp \
+    tests/memory_reader_unittest.cpp \
+    tests/message_buffer_unittest.cpp \
+    tests/mock_os.cpp \
+    tests/mock_raw_os.cpp \
+    tests/os_unittest.cpp \
+    tests/protocol_unittest.cpp
 LOCAL_STATIC_LIBRARIES := \
     libgmock \
     libgtest \
@@ -70,20 +68,3 @@ LOCAL_SHARED_LIBRARIES := \
     libbase \
     liblog
 include $(BUILD_NATIVE_TEST)
-
-###
-### wifilogd host unit tests.
-###
-include $(CLEAR_VARS)
-LOCAL_MODULE := wifilogd_host_unit_test
-LOCAL_CPPFLAGS := $(wifilogd_cpp_flags) $(wifilogd_gtest_cpp_flags)
-LOCAL_C_INCLUDES := $(wifilogd_includes)
-LOCAL_SRC_FILES := $(wifilogd_src_files) $(wifilogd_test_src_files)
-LOCAL_STATIC_LIBRARIES := \
-    libgmock \
-    libgtest
-LOCAL_SHARED_LIBRARIES := \
-    libbase \
-    liblog
-LOCAL_LDLIBS := -lrt
-include $(BUILD_HOST_NATIVE_TEST)
