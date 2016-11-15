@@ -73,6 +73,21 @@ struct Command {
 };
 
 struct AsciiMessage {  // Old-style log messages.
+  AsciiMessage& set_data_len(uint16_t new_data_len) {
+    data_len = new_data_len;
+    return *this;
+  }
+
+  AsciiMessage& set_tag_len(uint8_t new_tag_len) {
+    tag_len = new_tag_len;
+    return *this;
+  }
+
+  AsciiMessage& set_severity(MessageSeverity new_severity) {
+    severity = new_severity;
+    return *this;
+  }
+
   uint16_t data_len;
   uint8_t tag_len;
   MessageSeverity severity;
