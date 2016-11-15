@@ -26,6 +26,7 @@
 
 #include "android-base/macros.h"
 
+#include "wifilogd/local_utils.h"
 #include "wifilogd/raw_os.h"
 
 namespace android {
@@ -60,6 +61,19 @@ class Os {
   // Returns the current time, as reported by the clock with |clock_id|.
   virtual Timestamp GetTimestamp(clockid_t clock_id) const;
 
+  // Receives a datagram of up to |buflen| from |fd|, writing the data to |buf|.
+  // Returns the size of the datagram, and the result of the operation (0 for
+  // success, |errno| otherwise).
+  //
+  // Notes:
+  // - |buflen| may not exceed the maximal value for ssize_t.
+  // - The call blocks until a datagram is available.
+  // - If the datagram is larger than |buflen|, only |buflen| bytes will
+  //   be received. The returned size_t will, however, reflect the full
+  //   length of the datagram.
+  virtual std::tuple<size_t, Errno> ReceiveDatagram(int fd, NONNULL void* buf,
+                                                    size_t buflen);
+
   // Writes |buflen| bytes from |buf| to |fd|. Returns the number of bytes
   // written, and the result of the operation (0 for success, |errno|
   // otherwise).
@@ -67,7 +81,7 @@ class Os {
   // Notes:
   // - |buflen| may not exceed the maximal value for ssize_t.
   // - The returned size_t will not exceed |buflen|.
-  virtual std::tuple<size_t, Errno> Write(int fd, const void* buf,
+  virtual std::tuple<size_t, Errno> Write(int fd, NONNULL const void* buf,
                                           size_t buflen);
 
  private:

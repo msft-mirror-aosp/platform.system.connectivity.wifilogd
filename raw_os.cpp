@@ -33,6 +33,10 @@ int RawOs::ClockGettime(clockid_t clock_id, struct timespec* ts) const {
   return clock_gettime(clock_id, ts);
 }
 
+ssize_t RawOs::Recv(int sockfd, void* buf, size_t buflen, int flags) {
+  return recv(sockfd, buf, buflen, flags);
+}
+
 ssize_t RawOs::Write(int fd, const void* buf, size_t buflen) {
   return write(fd, buf, buflen);
 }
