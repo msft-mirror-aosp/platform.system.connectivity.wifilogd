@@ -30,6 +30,8 @@ namespace wifilogd {
 
 namespace {
 constexpr auto kMainBufferSizeBytes = 128 * 1024;
+// TODO(b/32840641): Tune the sleep time.
+constexpr auto kTransientErrorSleepTimeNsec = 100 * 1000;  // 100 usec
 }
 
 MainLoop::MainLoop(const std::string& socket_name)
@@ -53,8 +55,7 @@ void MainLoop::RunOnce() {
   std::tie(datagram_len, err) =
       os_->ReceiveDatagram(sock_fd_, input_buf.data(), input_buf.size());
   if (err) {
-    // TODO(b/32098735): Increment stats counter.
-    // TODO(b/32481888): Improve error handling.
+    ProcessError(err);
     return;
   }
 
@@ -65,6 +66,21 @@ void MainLoop::RunOnce() {
 
   command_processor_->ProcessCommand(input_buf.data(), datagram_len,
                                      Os::kInvalidFd);
+}
+
+// Private methods below.
+
+void MainLoop::ProcessError(Os::Errno err) {
+  if (err == EINTR || err == ENOMEM) {
+    // TODO(b/32098735): Increment stats counter.
+    os_->Nanosleep(kTransientErrorSleepTimeNsec);
+    return;
+  }
+
+  // Any other error is unexpected, and assumed to be non-recoverable.
+  // (If, e.g., our socket is in a bad state, then we won't be able to receive
+  // any new log messages.)
+  LOG(FATAL) << "Unexpected error: " << std::strerror(err);
 }
 
 }  // namespace wifilogd
