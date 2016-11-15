@@ -36,6 +36,7 @@ class MockOs : public Os {
   MOCK_CONST_METHOD1(GetTimestamp, Timestamp(clockid_t clock_id));
   MOCK_METHOD1(GetControlSocket,
                std::tuple<int, Errno>(const std::string& socket_name));
+  MOCK_METHOD1(Nanosleep, void(uint32_t sleep_time_nsec));
   MOCK_METHOD3(ReceiveDatagram,
                std::tuple<size_t, Errno>(int fd, void* buf, size_t buflen));
   MOCK_METHOD3(Write, std::tuple<size_t, Os::Errno>(int fd, const void* buf,

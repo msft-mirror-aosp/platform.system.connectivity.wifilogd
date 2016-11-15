@@ -15,6 +15,7 @@
  */
 
 #include <array>
+#include <iostream>
 #include <memory>
 #include <tuple>
 
@@ -25,11 +26,25 @@
 #include "wifilogd/os.h"
 #include "wifilogd/tests/mock_raw_os.h"
 
+// This function must be defined in the same namespace as |timespec|. Hence the
+// placement of this function at the top level.
+inline void PrintTo(const timespec& ts, ::std::ostream* os) {
+  *os << "[secs:" << ts.tv_sec << " "
+      << "nsecs:" << ts.tv_nsec << "]";
+}
+
 namespace android {
 namespace wifilogd {
 namespace {
 
 using ::testing::_;
+using ::testing::Invoke;
+using ::testing::InSequence;
+using ::testing::Matcher;
+using ::testing::MatcherInterface;
+using ::testing::MatchResultListener;
+using ::testing::NotNull;
+using ::testing::Pointee;
 using ::testing::Return;
 using ::testing::SetArgumentPointee;
 using ::testing::SetErrnoAndReturn;
@@ -51,6 +66,29 @@ class OsTest : public ::testing::Test {
   // to |os_|.
   MockRawOs* raw_os_;
 };
+
+class TimespecMatcher : public MatcherInterface<const timespec&> {
+ public:
+  explicit TimespecMatcher(const timespec& expected) : expected_(expected) {}
+
+  virtual void DescribeTo(::std::ostream* os) const {
+    *os << "equals ";
+    PrintTo(expected_, os);
+  }
+
+  virtual bool MatchAndExplain(const timespec& actual,
+                               MatchResultListener* /* listener */) const {
+    return actual.tv_sec == expected_.tv_sec &&
+           actual.tv_nsec == expected_.tv_nsec;
+  }
+
+ private:
+  const timespec& expected_;
+};
+
+Matcher<const timespec&> EqualsTimespec(const timespec& expected) {
+  return MakeMatcher(new TimespecMatcher(expected));
+}
 
 }  // namespace
 
@@ -84,6 +122,72 @@ TEST_F(OsTest, GetTimestampSucceeds) {
   const Os::Timestamp received = os_->GetTimestamp(CLOCK_REALTIME);
   EXPECT_EQ(kFakeSecs, received.secs);
   EXPECT_EQ(kFakeNsecs, received.nsecs);
+}
+
+TEST_F(OsTest, NanosleepPassesNormalValueToSyscall) {
+  constexpr auto kSleepTimeNsec = 100;
+  EXPECT_CALL(*raw_os_,
+              Nanosleep(Pointee(EqualsTimespec({0, kSleepTimeNsec})), _));
+  os_->Nanosleep(kSleepTimeNsec);
+}
+
+TEST_F(OsTest, NanosleepPassesMaxmimalValueToSyscall) {
+  EXPECT_CALL(*raw_os_,
+              Nanosleep(Pointee(EqualsTimespec({0, Os::kMaxNanos})), _));
+  os_->Nanosleep(Os::kMaxNanos);
+}
+
+TEST_F(OsTest, NanosleepPassesZeroValueToSyscall) {
+  EXPECT_CALL(*raw_os_, Nanosleep(Pointee(EqualsTimespec({0, 0})), _));
+  os_->Nanosleep(0);
+}
+
+TEST_F(OsTest, NanosleepClampsOverlyLargeValue) {
+  EXPECT_CALL(*raw_os_,
+              Nanosleep(Pointee(EqualsTimespec({0, Os::kMaxNanos})), _));
+  os_->Nanosleep(Os::kMaxNanos + 1);
+}
+
+TEST_F(OsTest, NanosleepRetriesOnInterruptedCall) {
+  InSequence seq;
+  EXPECT_CALL(*raw_os_, Nanosleep(_, NotNull()))
+      .WillOnce(Invoke([](const timespec* /* desired */, timespec* remaining) {
+        *remaining = {0, 100};
+        errno = EINTR;
+        return -1;
+      }));
+  EXPECT_CALL(*raw_os_, Nanosleep(Pointee(EqualsTimespec({0, 100})), _));
+  os_->Nanosleep(Os::kMaxNanos);
+}
+
+TEST_F(OsTest, NanosleepRetriesMultipleTimesIfNecessary) {
+  InSequence seq;
+  EXPECT_CALL(*raw_os_, Nanosleep(_, NotNull()))
+      .WillOnce(Invoke([](const timespec* /* desired */, timespec* remaining) {
+        *remaining = {0, 100};
+        errno = EINTR;
+        return -1;
+      }));
+  EXPECT_CALL(*raw_os_, Nanosleep(_, NotNull()))
+      .WillOnce(Invoke([](const timespec* /* desired */, timespec* remaining) {
+        *remaining = {0, 50};
+        errno = EINTR;
+        return -1;
+      }));
+  EXPECT_CALL(*raw_os_, Nanosleep(Pointee(EqualsTimespec({0, 50})), _));
+  os_->Nanosleep(Os::kMaxNanos);
+}
+
+TEST_F(OsTest, NanosleepIgnoresEintrWithZeroTimeRemaining) {
+  InSequence seq;
+  EXPECT_CALL(*raw_os_, Nanosleep(_, NotNull()))
+      .WillOnce(Invoke([](const timespec* /* desired */, timespec* remaining) {
+        *remaining = {0, 0};
+        errno = EINTR;
+        return -1;
+      }));
+  EXPECT_CALL(*raw_os_, Nanosleep(_, _)).Times(0);
+  os_->Nanosleep(Os::kMaxNanos);
 }
 
 TEST_F(OsTest, ReceiveDatagramReturnsCorrectValueForMaxSizedDatagram) {
@@ -215,6 +319,12 @@ TEST_F(OsDeathTest, GetTimestampOverlyLargeNsecsCausesDeath) {
 TEST_F(OsDeathTest, GetTimestampRawOsErrorCausesDeath) {
   ON_CALL(*raw_os_, ClockGettime(_, _)).WillByDefault(Return(-1));
   EXPECT_DEATH(os_->GetTimestamp(CLOCK_REALTIME), "Unexpected error");
+}
+
+TEST_F(OsDeathTest, NanosleepUnexpectedErrorCausesDeath) {
+  ON_CALL(*raw_os_, Nanosleep(Pointee(EqualsTimespec({0, Os::kMaxNanos})), _))
+      .WillByDefault(SetErrnoAndReturn(EFAULT, -1));
+  EXPECT_DEATH(os_->Nanosleep(Os::kMaxNanos), "Unexpected error");
 }
 
 TEST_F(OsDeathTest, ReceiveDatagramWithOverlyLargeBufferCausesDeath) {
