@@ -39,6 +39,8 @@ class MainLoop {
   void RunOnce();
 
  private:
+  void ProcessError(Os::Errno err);
+
   std::unique_ptr<Os> os_;
   std::unique_ptr<CommandProcessor> command_processor_;
   // We use an int, rather than a unique_fd, because the file
