@@ -30,12 +30,10 @@ make -j32 -C $ANDROID_BUILD_TOP -f build/core/main.mk \
 
 set -x # print commands
 
-$ANDROID_HOST_OUT/nativetest/wifilogd_host_unit_test/wifilogd_host_unit_test
-$ANDROID_HOST_OUT/nativetest64/wifilogd_host_unit_test/wifilogd_host_unit_test
-
 adb root
 adb wait-for-device
 adb remount
 adb sync
+
 adb shell /data/nativetest/wifilogd_unit_test/wifilogd_unit_test
 adb shell /data/nativetest64/wifilogd_unit_test/wifilogd_unit_test
