@@ -57,6 +57,7 @@ LOCAL_SRC_FILES := \
     tests/main.cpp \
     tests/memory_reader_unittest.cpp \
     tests/message_buffer_unittest.cpp \
+    tests/mock_command_processor.cpp \
     tests/mock_os.cpp \
     tests/mock_raw_os.cpp \
     tests/os_unittest.cpp \
