@@ -109,9 +109,10 @@ TEST_F(MainLoopTest, RunOnceLimitsMaxSizeReportedToCommandProcessor) {
   main_loop_->RunOnce();
 }
 
-TEST_F(MainLoopTest, RunOnceDoesNotPassDataToCommandProcessorOnError) {
+TEST_F(MainLoopTest, RunOnceSleepsAndDoesNotPassDataToCommandProcessorOnError) {
   EXPECT_CALL(*os_, ReceiveDatagram(_, _, protocol::kMaxMessageSize))
       .WillOnce(Return(std::tuple<size_t, Os::Errno>{0, EINTR}));
+  EXPECT_CALL(*os_, Nanosleep(_));
   EXPECT_CALL(*command_processor_, ProcessCommand(_, _, _)).Times(0);
   main_loop_->RunOnce();
 }
@@ -129,6 +130,12 @@ TEST_F(MainLoopDeathTest, CtorFailureToFetchControlSocketCausesDeath) {
   EXPECT_DEATH(
       MainLoop(kFakeSocketName, std::move(os), std::move(command_processor)),
       "Failed to get control socket");
+}
+
+TEST_F(MainLoopDeathTest, RunOnceTerminatesOnUnexpectedError) {
+  ON_CALL(*os_, ReceiveDatagram(_, _, protocol::kMaxMessageSize))
+      .WillByDefault(Return(std::tuple<size_t, Os::Errno>{0, EFAULT}));
+  EXPECT_DEATH(main_loop_->RunOnce(), "Unexpected error");
 }
 
 }  // namespace wifilogd
