@@ -17,6 +17,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "cutils/sockets.h"
+
 #include "wifilogd/raw_os.h"
 
 namespace android {
@@ -31,6 +33,10 @@ RawOs::~RawOs() {}
 
 int RawOs::ClockGettime(clockid_t clock_id, struct timespec* ts) const {
   return clock_gettime(clock_id, ts);
+}
+
+int RawOs::GetControlSocket(const char* socket_name) {
+  return android_get_control_socket(socket_name);
 }
 
 ssize_t RawOs::Recv(int sockfd, void* buf, size_t buflen, int flags) {

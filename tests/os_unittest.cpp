@@ -34,6 +34,7 @@ using ::testing::Return;
 using ::testing::SetArgumentPointee;
 using ::testing::SetErrnoAndReturn;
 using ::testing::StrictMock;
+using ::testing::StrEq;
 
 using local_utils::GetMaxVal;
 
@@ -52,6 +53,26 @@ class OsTest : public ::testing::Test {
 };
 
 }  // namespace
+
+TEST_F(OsTest, GetControlSocketReturnsFdAndZeroOnSuccess) {
+  constexpr char kSocketName[] = "fake-daemon";
+  constexpr int kFakeValidFd = 100;
+  EXPECT_CALL(*raw_os_, GetControlSocket(StrEq(kSocketName)))
+      .WillOnce(Return(kFakeValidFd));
+
+  constexpr std::tuple<int, Os::Errno> kExpectedResult{kFakeValidFd, 0};
+  EXPECT_EQ(kExpectedResult, os_->GetControlSocket(kSocketName));
+}
+
+TEST_F(OsTest, GetControlSocketReturnsInvalidFdAndErrorOnFailure) {
+  constexpr char kSocketName[] = "fake-daemon";
+  constexpr Os::Errno kError = EINVAL;
+  EXPECT_CALL(*raw_os_, GetControlSocket(StrEq(kSocketName)))
+      .WillOnce(SetErrnoAndReturn(kError, -1));
+
+  constexpr std::tuple<int, Os::Errno> kExpectedResult{Os::kInvalidFd, kError};
+  EXPECT_EQ(kExpectedResult, os_->GetControlSocket(kSocketName));
+}
 
 TEST_F(OsTest, GetTimestampSucceeds) {
   constexpr auto kFakeSecs = 1U;
