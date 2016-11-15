@@ -55,17 +55,6 @@ class CommandProcessor {
                       int fd);
 
  private:
-  class TimestampHeader {
-   public:
-    // Returns a string with a formatted representation of the timestamps
-    // contained within this header.
-    std::string ToString() const;
-
-    Os::Timestamp since_boot_awake_only;
-    Os::Timestamp since_boot_with_sleep;
-    Os::Timestamp since_epoch;  // non-monotonic
-  };
-
   // Copies |command_buffer| into the log buffer. Returns true if the
   // command was copied. If |command_len| exceeds protocol::kMaxMessageSize,
   // copies the first protocol::kMaxMessageSize of |command_buffer|, and returns
