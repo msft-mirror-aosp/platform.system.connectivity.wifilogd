@@ -51,6 +51,16 @@ enum class MessageSeverity : uint8_t {
 };
 
 struct Command {
+  Command& set_opcode(Opcode new_opcode) {
+    opcode = new_opcode;
+    return *this;
+  }
+
+  Command& set_payload_len(uint16_t new_payload_len) {
+    payload_len = new_payload_len;
+    return *this;
+  }
+
   uint64_t src_boottime_nsec;  // For latency measurement.
   // For drop detection. Sequence numbers are meaningful only within
   // the context of a single tag. (This is to minimize synchronization

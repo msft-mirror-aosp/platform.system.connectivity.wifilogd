@@ -97,15 +97,16 @@ class CommandProcessorTest : public ::testing::Test {
                      uint16_t, 0, kMaxDataLength);
     ascii_message_header.severity = protocol::MessageSeverity::kError;
 
-    protocol::Command command{};
-    constexpr auto kMaxPayloadLength = GetMaxVal(command.payload_len);
-    size_t payload_length = sizeof(ascii_message_header) + tag.length() +
-                            message.length() + command_payload_len_adjustment;
-    EXPECT_TRUE(payload_length <= kMaxPayloadLength);
-    command.opcode = protocol::Opcode::kWriteAsciiMessage;
-    command.payload_len =
-        SAFELY_CLAMP(payload_length, uint16_t, 0, kMaxPayloadLength);
-
+    const size_t payload_len = sizeof(ascii_message_header) + tag.length() +
+                               message.length() +
+                               command_payload_len_adjustment;
+    const auto& command =
+        protocol::Command()
+            .set_opcode(protocol::Opcode::kWriteAsciiMessage)
+            .set_payload_len(SAFELY_CLAMP(
+                payload_len, uint16_t, 0,
+                GetMaxVal<decltype(protocol::Command::payload_len)>()));
+    EXPECT_EQ(payload_len, command.payload_len);
     return CommandBuffer()
         .AppendOrDie(&command, sizeof(command))
         .AppendOrDie(&ascii_message_header, sizeof(ascii_message_header))
@@ -139,10 +140,9 @@ class CommandProcessorTest : public ::testing::Test {
   }
 
   bool SendDumpBuffers() {
-    protocol::Command command{};
-    command.opcode = protocol::Opcode::kDumpBuffers;
-    command.payload_len = 0;
-
+    const auto& command = protocol::Command()
+                              .set_opcode(protocol::Opcode::kDumpBuffers)
+                              .set_payload_len(0);
     const auto& buf = CommandBuffer().AppendOrDie(&command, sizeof(command));
     constexpr int kFakeFd = 100;
     return command_processor_->ProcessCommand(buf.data(), buf.size(), kFakeFd);
@@ -217,11 +217,11 @@ TEST_F(CommandProcessorTest, ProcessCommandInvalidOpcodeReturnsFailure) {
   using opcode_integral_t = std::underlying_type<opcode_enum_t>::type;
   constexpr auto invalid_opcode = GetMaxVal<opcode_integral_t>();
 
-  protocol::Command command{};
-  command.opcode = local_utils::CopyFromBufferOrDie<opcode_enum_t>(
-      &invalid_opcode, sizeof(invalid_opcode));
-  command.payload_len = 0;
-
+  const auto& command =
+      protocol::Command()
+          .set_opcode(local_utils::CopyFromBufferOrDie<opcode_enum_t>(
+              &invalid_opcode, sizeof(invalid_opcode)))
+          .set_payload_len(0);
   const auto& buf = CommandBuffer().AppendOrDie(&command, sizeof(command));
   constexpr int kFakeFd = 100;
   EXPECT_FALSE(
