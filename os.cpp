@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#include <errno.h>
-
 #include <algorithm>
+#include <cerrno>
 #include <cstdint>
+#include <cstring>
 
 #include "android-base/logging.h"
 
@@ -68,6 +68,26 @@ Os::Timestamp Os::GetTimestamp(clockid_t clock_id) const {
   now_timestamp.nsecs =
       SAFELY_CLAMP(now_timespec.tv_nsec, uint32_t, 0, kMaxNanoSeconds);
   return now_timestamp;
+}
+
+void Os::Nanosleep(uint32_t sleep_time_nsec) {
+  struct timespec sleep_timespec = {
+      0,  // tv_sec
+      SAFELY_CLAMP(sleep_time_nsec, decltype(timespec::tv_nsec), 0, kMaxNanos)};
+
+  int failed = 0;
+  do {
+    struct timespec remaining_timespec;
+    failed = raw_os_->Nanosleep(&sleep_timespec, &remaining_timespec);
+    sleep_timespec = remaining_timespec;
+  } while (failed && errno == EINTR && sleep_timespec.tv_nsec > 0);
+
+  if (failed && errno != EINTR) {
+    // The only other documented errors for the underlying nanosleep() call are
+    // EFAULT and EINVAL. But we always pass valid pointers, and the values in
+    // |sleep_timespec| are always valid.
+    LOG(FATAL) << "Unexpected error: " << std::strerror(errno);
+  }
 }
 
 std::tuple<size_t, Os::Errno> Os::ReceiveDatagram(int fd, void* buf,
