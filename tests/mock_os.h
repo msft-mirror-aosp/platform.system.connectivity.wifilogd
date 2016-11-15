@@ -17,6 +17,7 @@
 #ifndef TESTS_MOCK_OS_H_
 #define TESTS_MOCK_OS_H_
 
+#include <string>
 #include <tuple>
 
 #include "android-base/macros.h"
@@ -33,6 +34,8 @@ class MockOs : public Os {
   ~MockOs() override;
 
   MOCK_CONST_METHOD1(GetTimestamp, Timestamp(clockid_t clock_id));
+  MOCK_METHOD1(GetControlSocket,
+               std::tuple<int, Errno>(const std::string& socket_name));
   MOCK_METHOD3(ReceiveDatagram,
                std::tuple<size_t, Errno>(int fd, void* buf, size_t buflen));
   MOCK_METHOD3(Write, std::tuple<size_t, Os::Errno>(int fd, const void* buf,

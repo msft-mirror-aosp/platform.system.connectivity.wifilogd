@@ -38,6 +38,9 @@ class RawOs {
   virtual int ClockGettime(clockid_t clock_id,
                            NONNULL struct timespec* tspec) const;
 
+  // See android_get_control_socket().
+  virtual int GetControlSocket(const char* socket_name);
+
   // See recv().
   virtual ssize_t Recv(int sockfd, void* buf, size_t buflen, int flags);
 
