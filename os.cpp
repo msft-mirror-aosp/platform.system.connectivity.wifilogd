@@ -33,9 +33,21 @@ namespace {
 constexpr auto kMaxNanoSeconds = 1000 * 1000 * 1000 - 1;
 }
 
+constexpr int Os::kInvalidFd;
+
 Os::Os() : raw_os_(new RawOs()) {}
 Os::Os(std::unique_ptr<RawOs> raw_os) : raw_os_(std::move(raw_os)) {}
 Os::~Os() {}
+
+std::tuple<int, Os::Errno> Os::GetControlSocket(
+    const std::string& socket_name) {
+  int sock_fd = raw_os_->GetControlSocket(socket_name.c_str());
+  if (sock_fd < 0) {
+    return {kInvalidFd, errno};
+  } else {
+    return {sock_fd, 0};
+  }
+}
 
 Os::Timestamp Os::GetTimestamp(clockid_t clock_id) const {
   struct timespec now_timespec;
