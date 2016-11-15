@@ -90,13 +90,13 @@ std::string GetStringFromMemoryReader(NONNULL MemoryReader* buffer_reader,
   constexpr char kBufferOverrunError[] = "[buffer-overrun]";
   constexpr char kZeroLengthError[] = "[empty]";
   if (!desired_len) {
-    // TODO(b/32098735): Incremement stats counter.
+    // TODO(b/32098735): Increment stats counter.
     return kZeroLengthError;
   }
 
   auto effective_len = desired_len;
   if (buffer_reader->size() < effective_len) {
-    // TODO(b/32098735): Incremement stats counter.
+    // TODO(b/32098735): Increment stats counter.
     effective_len = buffer_reader->size();
   }
 
@@ -128,11 +128,14 @@ CommandProcessor::CommandProcessor(size_t buffer_size_bytes,
                                    std::unique_ptr<Os> os)
     : current_log_buffer_(buffer_size_bytes), os_(std::move(os)) {}
 
+CommandProcessor::~CommandProcessor() {}
+
 bool CommandProcessor::ProcessCommand(const void* input_buffer,
                                       size_t n_bytes_read, int fd) {
   unique_fd wrapped_fd(fd);
 
   if (n_bytes_read < sizeof(protocol::Command)) {
+    // TODO(b/32098735): Increment stats counter.
     return false;
   }
 
@@ -155,7 +158,7 @@ bool CommandProcessor::ProcessCommand(const void* input_buffer,
 
   LOG(DEBUG) << "Received unexpected opcode "
              << local_utils::CastEnumToInteger(command_header.opcode);
-  // TODO(b/32098735): Incremement stats counter.
+  // TODO(b/32098735): Increment stats counter.
   return false;
 }
 
@@ -253,7 +256,7 @@ bool CommandProcessor::Dump(unique_fd dump_fd) {
 std::string CommandProcessor::FormatAsciiMessage(MemoryReader buffer_reader) {
   constexpr char kShortHeaderError[] = "[truncated-header]";
   if (buffer_reader.size() < sizeof(protocol::AsciiMessage)) {
-    // TODO(b/32098735): Incremement stats counter.
+    // TODO(b/32098735): Increment stats counter.
     return kShortHeaderError;
   }
 

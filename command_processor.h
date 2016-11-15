@@ -41,6 +41,8 @@ class CommandProcessor {
   // This method allows tests to provide a MockOs.
   CommandProcessor(size_t buffer_size_bytes, std::unique_ptr<Os> os);
 
+  virtual ~CommandProcessor();
+
   // Processes the given command, with the given file descriptor. The effect of
   // this call depends on the contents of |input_buf|. In particular, depending
   // on the command, |fd| may be used for reading or writing, or |fd| may be
@@ -48,11 +50,10 @@ class CommandProcessor {
   // returns, in all cases.
   //
   // (Ideally, we might want to take |fd| as a unique_fd. Unfortunately,
-  // GoogleMock doesn't deal well with move-only parameters. And we'll
-  // want to mock this method, eventually.
+  // GoogleMock doesn't deal well with move-only parameters.
   // https://github.com/google/googletest/issues/395)
-  bool ProcessCommand(NONNULL const void* input_buf, size_t n_bytes_read,
-                      int fd);
+  virtual bool ProcessCommand(NONNULL const void* input_buf,
+                              size_t n_bytes_read, int fd);
 
  private:
   // Copies |command_buffer| into the log buffer. Returns true if the
