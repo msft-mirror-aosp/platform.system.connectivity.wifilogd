@@ -52,8 +52,6 @@ LOCAL_MODULE := wifilogd_unit_test
 LOCAL_COMPATIBILITY_SUITE := device-tests
 LOCAL_CPPFLAGS := $(wifilogd_cpp_flags) $(wifilogd_gtest_cpp_flags)
 
-# To workaround bug 112002407
-LOCAL_CPPFLAGS_x86 := -Wno-over-aligned
 LOCAL_C_INCLUDES := $(wifilogd_includes)
 LOCAL_SRC_FILES := \
     tests/byte_buffer_unittest.cpp \
